@@ -1,0 +1,41 @@
+# Virtual Environments
+venv/
+.venv/
+ENV/
+env/
+**/venv/
+backend/venv/
+
+# Node modules & npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Backups & Patches
+*.bak
+*.patch
+*.tmp
+*.orig
+
+# Environment & Secrets
+.env
+.env.*
+*.local
+credentials.json
+service_account.json
+
+# Operating System & IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+google-cloud-bigquery
+firebase-admin
+pyjwt
+pydantic
+uvloop
+httptools
+pandas

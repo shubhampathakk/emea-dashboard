@@ -1,0 +1,316 @@
+import datetime
+import logging
+import os
+from typing import Optional, Dict, Any, List
+from fastapi import Header, HTTPException, Request
+from google.cloud import bigquery
+from google.oauth2.credentials import Credentials
+
+logger = logging.getLogger(__name__)
+
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "concord-prod")
+BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery"
+
+def extract_ldap(raw_val: Optional[str], fallback: str = "") -> str:
+    """Extracts clean ldap from email or raw string."""
+    if not raw_val:
+        return fallback.lower().replace(" ", "") if fallback else "unknown"
+    val = str(raw_val).strip()
+    if ":" in val:
+        val = val.split(":")[-1].strip()
+    # If email format, strip domain
+    if "@" in val:
+        val = val.split("@")[0].strip()
+    return val.lower() or (fallback.lower().replace(" ", "") if fallback else "unknown")
+
+def get_bq_client(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_user_oauth_token: Optional[str] = Header(None, alias="X-User-OAuth-Token"),
+    x_google_oauth_token: Optional[str] = Header(None, alias="X-Google-OAuth-Token"),
+) -> bigquery.Client:
+    """Returns BigQuery client using the user's OAuth token."""
+    token = (
+        x_user_oauth_token
+        or x_google_oauth_token
+        or request.headers.get("x-user-oauth-token")
+        or request.headers.get("X-User-OAuth-Token")
+        or request.headers.get("x-google-oauth-token")
+        or request.headers.get("X-Google-OAuth-Token")
+    )
+    
+    if not token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.split("Bearer ")[1].strip()
+        if auth_token != "MOCK_TOKEN":
+            token = auth_token
+
+    if token and token.strip():
+        logger.info("Using explicit OAuth token from Header for BigQuery.")
+        user_credentials = Credentials(
+            token=token.strip(),
+            scopes=[BIGQUERY_SCOPE],
+        )
+        return bigquery.Client(project=PROJECT_ID, credentials=user_credentials)
+    
+    logger.info("No OAuth token provided. Falling back to ADC.")
+    return bigquery.Client(project=PROJECT_ID)
+
+def query_emea_delivery_data(
+    client: bigquery.Client, 
+    start_date: Optional[str] = None, 
+    end_date: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetches active EMEA & GSD resources and weekly schedules filtered by date range.
+    Defaults to last 90 days if no date range is provided. Zero LIMIT applied.
+    """
+    today = datetime.date.today()
+    if not end_date:
+        end_date = today.strftime("%Y-%m-%d")
+    if not start_date:
+        start_date = (today - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+
+    query = """
+    WITH target_resources AS (
+      SELECT 
+        resource_id,
+        ANY_VALUE(full_name) AS resource_name,
+        ANY_VALUE(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) AS ldap,
+        ANY_VALUE(role) AS role,
+        ANY_VALUE(cost_center) AS cost_center,
+        ANY_VALUE(cost_center_name) AS cost_center_name,
+        -- All matched resources are part of the unified EMEA delivery pool (CC1 is EMEA ring-fenced)
+        'EMEA' AS region,
+        'EMEA' AS hub,
+        ANY_VALUE(practice) AS practice,
+        LOGICAL_OR(OOO) AS is_ooo,
+        MAX(timecard_week_ending) AS week_ending,
+        ROUND(AVG(scheduled_timecard_hours_net), 1) AS scheduled_timecard_hours
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE (
+          cost_center_name LIKE '%EMEA%'
+          OR cost_center = 'CC1'
+          OR region = 'EMEA'
+          OR pso_region = 'EMEA'
+        )
+        AND (cost_center_name NOT LIKE '%JAPAC%' AND cost_center_name NOT LIKE '%LATAM%' AND cost_center_name NOT LIKE '%NORTHAM%')
+        AND (region NOT LIKE '%AMER%' AND region NOT LIKE '%NorthAM%')
+        AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
+      GROUP BY resource_id
+    ),
+    target_assignments AS (
+      SELECT 
+        ws.resource_id,
+        ws.project_id,
+        MAX(ws.schedule_week_ending) AS week_ending,
+        ROUND(AVG(ws.scheduled_timecard_hours), 1) AS scheduled_timecard_hours
+      FROM `concord-prod.service_cloudbi.weekly_schedules` ws
+      WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.weekly_schedules`)
+        AND ws.schedule_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
+        AND ws.scheduled_timecard_hours > 0
+      GROUP BY ws.resource_id, ws.project_id
+    ),
+    target_projects AS (
+      SELECT 
+        project_id,
+        ANY_VALUE(project_name) AS project_name,
+        ANY_VALUE(COALESCE(account_name, project_name)) AS account_name,
+        ANY_VALUE(COALESCE(engagement_manager, 'Delivery Lead')) AS engagement_manager_name,
+        ANY_VALUE(project_start_date) AS project_start_date,
+        ANY_VALUE(project_end_date) AS project_end_date,
+        ANY_VALUE(project_status) AS project_status
+      FROM `concord-prod.service_cloudbi.projects`
+      GROUP BY project_id
+    )
+    SELECT 
+      r.resource_id,
+      r.resource_name,
+      COALESCE(r.ldap, SPLIT(r.resource_name, ' ')[OFFSET(0)]) AS ldap,
+      r.role,
+      r.cost_center,
+      r.cost_center_name,
+      r.region,
+      r.hub,
+      r.practice,
+      r.is_ooo,
+      r.scheduled_timecard_hours,
+      COALESCE(a.week_ending, r.week_ending) AS week_ending,
+      a.project_id,
+      COALESCE(p.account_name, 'Strategic Partner') AS account_name,
+      COALESCE(p.project_name, 'Cloud Transformation') AS project_name,
+      COALESCE(p.engagement_manager_name, 'PSO Lead') AS engagement_manager_name,
+      COALESCE(p.project_start_date, @start_date) AS project_start_date,
+      COALESCE(p.project_end_date, @end_date) AS project_end_date,
+      COALESCE(a.scheduled_timecard_hours, r.scheduled_timecard_hours) AS proj_scheduled_hours
+    FROM target_resources r
+    LEFT JOIN target_assignments a ON r.resource_id = a.resource_id
+    LEFT JOIN target_projects p ON a.project_id = p.project_id
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("start_date", "STRING", start_date),
+            bigquery.ScalarQueryParameter("end_date", "STRING", end_date),
+        ]
+    )
+    results = client.query(query, job_config=job_config).result(timeout=45)
+    rows = []
+    for row in results:
+        d = dict(row)
+        d["ldap"] = extract_ldap(d.get("ldap"), fallback=d.get("resource_name", ""))
+        rows.append(d)
+    return rows
+
+def query_emea_pipeline_data(
+    client: bigquery.Client, 
+    start_date: Optional[str] = None, 
+    end_date: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetches EMEA sales pipeline opportunities filtered by close_date range.
+    Defaults to last 90 days if no date range is provided. Zero LIMIT applied.
+    """
+    today = datetime.date.today()
+    if not end_date:
+        end_date = today.strftime("%Y-%m-%d")
+    if not start_date:
+        start_date = (today - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+
+    query = """
+    SELECT
+      opportunity_id,
+      opp_name,
+      account_name,
+      stage_name,
+      stage_simplified,
+      forecast_category,
+      'EMEA' AS region,
+      COALESCE(total_sale_price_usd, 0) AS total_sale_price_usd,
+      COALESCE(primary_solution, 'Cloud Solutions') AS solution,
+      close_date
+    FROM `concord-prod.service_cloudbi.pso_pipeline`
+    WHERE pso_region LIKE '%EMEA%'
+      AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.pso_pipeline`)
+      AND close_date BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
+    ORDER BY close_date DESC
+    """
+    try:
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("start_date", "STRING", start_date),
+                bigquery.ScalarQueryParameter("end_date", "STRING", end_date),
+            ]
+        )
+        results = client.query(query, job_config=job_config).result(timeout=45)
+        return [dict(row) for row in results]
+    except Exception as e:
+        logger.warning(f"Pipeline query failed: {e}")
+        return []
+
+def fetch_projects_by_ldap(
+    ldap: str,
+    client: bigquery.Client,
+    billing_project_id: str = "concord-prod",
+    dataset: str = "service_cloudbi",
+) -> List[Dict[str, Any]]:
+    """Fetches active/scheduled projects for a resource by LDAP, supporting email extraction."""
+    clean_ldap = extract_ldap(ldap)
+    query = f"""
+        WITH target_resource AS (
+            SELECT DISTINCT 
+                COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap) AS ldap, 
+                resource_id
+            FROM 
+                `{billing_project_id}.{dataset}.scheduled_vs_actual_utilization`
+            WHERE 
+                LOWER(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) = LOWER(@ldap)
+                AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.scheduled_vs_actual_utilization`)
+        )
+        SELECT DISTINCT
+            tr.ldap,
+            tr.resource_id,
+            ws.resource_name,
+            p.project_id,
+            p.project_name,
+            p.account_name,
+            p.project_status,
+            p.project_type,
+            p.project_start_date,
+            p.project_end_date,
+            p.vector_account_id,
+            p.project_region,
+            p.project_practice
+        FROM 
+            target_resource AS tr
+        INNER JOIN 
+            `{billing_project_id}.{dataset}.weekly_schedules` AS ws
+            ON tr.resource_id = ws.resource_id
+        INNER JOIN 
+            `{billing_project_id}.{dataset}.projects` AS p
+            ON ws.project_id = p.project_id
+        WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.weekly_schedules`)
+        ORDER BY 
+            p.project_start_date DESC
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("ldap", "STRING", clean_ldap)]
+    )
+    query_job = client.query(query, job_config=job_config)
+    return [dict(row.items()) for row in query_job.result()]
+
+def fetch_accounts_by_ldap(
+    ldap: str,
+    client: bigquery.Client,
+    billing_project_id: str = "concord-prod",
+    dataset: str = "service_cloudbi",
+) -> List[str]:
+    """Fetches list of unique account names associated with a given LDAP."""
+    clean_ldap = extract_ldap(ldap)
+    query = f"""
+        WITH target_resource AS (
+            SELECT DISTINCT 
+                COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap) AS ldap, 
+                resource_id
+            FROM 
+                `{billing_project_id}.{dataset}.scheduled_vs_actual_utilization`
+            WHERE 
+                LOWER(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) = LOWER(@ldap)
+                AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.scheduled_vs_actual_utilization`)
+        ),
+        ldap_accounts AS (
+            SELECT DISTINCT 
+                p.vector_account_id
+            FROM 
+                target_resource AS tr
+            INNER JOIN 
+                `{billing_project_id}.{dataset}.weekly_schedules` AS ws
+                ON tr.resource_id = ws.resource_id
+            INNER JOIN 
+                `{billing_project_id}.{dataset}.projects` AS p
+                ON ws.project_id = p.project_id
+            WHERE 
+                p.vector_account_id IS NOT NULL
+                AND ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.weekly_schedules`)
+        )
+        SELECT 
+            p.vector_account_id,
+            ANY_VALUE(p.account_name) AS account_name,
+            COUNT(DISTINCT p.project_id) AS total_account_projects
+        FROM 
+            `{billing_project_id}.{dataset}.projects` AS p
+        INNER JOIN 
+            ldap_accounts AS la
+            ON p.vector_account_id = la.vector_account_id
+        GROUP BY 
+            p.vector_account_id
+        ORDER BY 
+            total_account_projects DESC
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("ldap", "STRING", clean_ldap)]
+    )
+    results = client.query(query, job_config=job_config).result()
+    return [row["account_name"] for row in results]
+
+# Backwards compatibility alias
+query_emea_dashboard_data = query_emea_delivery_data
