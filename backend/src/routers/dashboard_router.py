@@ -288,11 +288,14 @@ def get_fallback_payload(start_date: Optional[str] = None, end_date: Optional[st
         except Exception as e:
             logger.error(f"Error loading pipeline fallback json: {e}")
 
-    # Dynamically filter by date range if provided
-    if start_date or end_date:
+    # Dynamically filter by date range ONLY IF explicit non-empty date range was provided
+    clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
+    clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
+
+    if clean_start or clean_end:
         today_str = datetime.date.today().strftime("%Y-%m-%d")
-        effective_start = start_date or "2020-01-01"
-        effective_end = end_date or today_str
+        effective_start = clean_start or "2020-01-01"
+        effective_end = clean_end or today_str
 
         filtered_delivery = [
             r for r in delivery_rows
@@ -320,13 +323,15 @@ def get_dashboard_data(
     end_date: Optional[str] = Query(None),
     bq_client: bigquery.Client = Depends(get_bq_client),
 ):
+    clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
+    clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
     try:
-        delivery_rows = query_emea_delivery_data(bq_client, start_date=start_date, end_date=end_date)
-        pipeline_rows = query_emea_pipeline_data(bq_client, start_date=start_date, end_date=end_date)
+        delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end)
+        pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
         return build_dashboard_payload(delivery_rows, pipeline_rows)
     except Exception as e:
         logger.warning(f"BigQuery failed, using fallback data. Error: {e}")
-        return get_fallback_payload(start_date=start_date, end_date=end_date)
+        return get_fallback_payload(start_date=clean_start, end_date=clean_end)
 
 @router.post("/refresh-bq")
 def refresh_bq(
@@ -334,13 +339,15 @@ def refresh_bq(
     end_date: Optional[str] = Query(None),
     bq_client: bigquery.Client = Depends(get_bq_client),
 ):
+    clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
+    clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
     try:
-        delivery_rows = query_emea_delivery_data(bq_client, start_date=start_date, end_date=end_date)
-        pipeline_rows = query_emea_pipeline_data(bq_client, start_date=start_date, end_date=end_date)
+        delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end)
+        pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
         return {"status": "ok", "data": build_dashboard_payload(delivery_rows, pipeline_rows)}
     except Exception as e:
         logger.warning(f"BigQuery refresh failed: {e}")
-        return {"status": "fallback", "data": get_fallback_payload(start_date=start_date, end_date=end_date)}
+        return {"status": "fallback", "data": get_fallback_payload(start_date=clean_start, end_date=clean_end)}
 
 @router.get("/users/{ldap}/projects")
 def get_user_projects(

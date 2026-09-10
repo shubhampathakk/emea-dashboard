@@ -374,6 +374,11 @@
 
         <!-- Right Header Actions -->
         <div class="flex items-center gap-2.5 mt-2 md:mt-0 flex-wrap">
+          <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs">
+            <span class="w-2 h-2 rounded-full bg-[#00cea8] animate-pulse"></span>
+            <span>Live Delivery Pool &bull; <strong class="text-white font-semibold" id="header-active-week">Week Ending: 05 Sep 2026</strong></span>
+          </div>
+
           <button id="btn-sync-bq" onclick="loadData(true)" class="inline-flex items-center gap-1.5 bg-[#151030] hover:bg-[#1f1745] text-[#e2e8f0] hover:text-white border border-[#372f6b] text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-200 shadow-xs hover:shadow-sm cursor-pointer" title="Sync live tables directly from BigQuery">
             <svg class="w-3.5 h-3.5 text-[#00cea8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             <span class="hidden sm:inline">Sync BQ</span>
@@ -430,56 +435,6 @@
   <!-- Main Container -->
   <main class="max-w-[1400px] mx-auto px-8 py-6 flex flex-col gap-6">
 
-    <!-- Date Range & Live BigQuery Query Control Bar -->
-    <section class="glass-card tilt-card bg-white rounded-2xl p-4 px-6 shadow-sm hover:shadow-md flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 border border-slate-200/90 border-l-4 border-l-[#915EFF] relative overflow-hidden text-slate-800">
-      <div class="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-purple-50/40 via-indigo-50/20 to-transparent pointer-events-none"></div>
-
-      <!-- Left: Title & Quick Presets -->
-      <div class="flex flex-wrap items-center gap-3.5 relative z-10">
-        <div class="flex items-center gap-2.5 text-slate-900">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#915EFF] to-[#6366f1] flex items-center justify-center text-white shadow-md shadow-[#915EFF]/25 shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-            </svg>
-          </div>
-          <div>
-            <div class="text-xs font-bold text-slate-900 flex items-center gap-2">
-              <span>Timeframe Filter</span>
-            </div>
-            <div class="text-[10px] text-[#7c3aed] font-mono font-semibold">Real-time BigQuery Date Partition</div>
-          </div>
-        </div>
-
-        <div class="h-8 w-px bg-slate-200 hidden sm:block mx-1"></div>
-
-        <!-- Preset Buttons with Fluid Hover -->
-        <div class="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-inner">
-          <button type="button" id="preset-btn-30" onclick="setDatePreset(30)" class="date-preset-btn text-[11px] font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer">30D</button>
-          <button type="button" id="preset-btn-90" onclick="setDatePreset(90)" class="date-preset-btn text-[11px] font-bold px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#915EFF] to-[#7c3aed] text-white shadow-xs shadow-[#915EFF]/30 transition cursor-pointer">Last 90D</button>
-          <button type="button" id="preset-btn-180" onclick="setDatePreset(180)" class="date-preset-btn text-[11px] font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer">180D</button>
-          <button type="button" id="preset-btn-YTD" onclick="setDatePreset('YTD')" class="date-preset-btn text-[11px] font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer">YTD</button>
-          <button type="button" id="preset-btn-runway" onclick="setDatePreset(90, true)" class="date-preset-btn text-[11px] font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition cursor-pointer">+90D Runway</button>
-        </div>
-      </div>
-
-      <!-- Right: Date Pickers & Search Query Button -->
-      <div class="flex flex-wrap items-center gap-3 relative z-10">
-        <div class="flex items-center gap-2">
-          <label class="text-xs text-slate-600 font-bold">From:</label>
-          <input type="date" id="filter-start-date" onchange="onCustomDateChange()" class="bg-slate-50 text-slate-900 text-xs font-semibold border border-slate-300 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#915EFF] focus:ring-2 focus:ring-[#915EFF]/20 shadow-2xs">
-        </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs text-slate-600 font-bold">To:</label>
-          <input type="date" id="filter-end-date" onchange="onCustomDateChange()" class="bg-slate-50 text-slate-900 text-xs font-semibold border border-slate-300 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#915EFF] focus:ring-2 focus:ring-[#915EFF]/20 shadow-2xs">
-        </div>
-        <button id="btn-apply-dates" onclick="applyDateFilter()" class="bg-gradient-to-r from-[#915EFF] to-[#7c3aed] hover:from-[#7c3aed] hover:to-[#6d28d9] text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm shadow-[#915EFF]/30 flex items-center gap-1.5 transition-all duration-200 cursor-pointer hover:shadow-md">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-          </svg>
-          <span>Search</span>
-        </button>
-      </div>
-    </section>
 
     <!-- Global 5 Modern Executive KPI Cards Row -->
     <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -3239,88 +3194,12 @@
     window.formatRosterDate = formatRosterDate;
 
 
-    function initDateFilter() {
-      const today = new Date();
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(today.getDate() - 90);
-
-      const startInput = document.getElementById('filter-start-date');
-      const endInput = document.getElementById('filter-end-date');
-
-      if (startInput && !startInput.value) {
-        startInput.value = ninetyDaysAgo.toISOString().split('T')[0];
-      }
-      if (endInput && !endInput.value) {
-        endInput.value = today.toISOString().split('T')[0];
-      }
-      updateDateRangeBadge();
-    }
-
-    function setDatePreset(days, isRunway = false) {
-      const today = new Date();
-      const startInput = document.getElementById('filter-start-date');
-      const endInput = document.getElementById('filter-end-date');
-
-      if (isRunway) {
-        const future = new Date();
-        future.setDate(today.getDate() + days);
-        if (startInput) startInput.value = today.toISOString().split('T')[0];
-        if (endInput) endInput.value = future.toISOString().split('T')[0];
-      } else if (days === 'YTD') {
-        const startOfYear = new Date(today.getFullYear(), 0, 1);
-        if (startInput) startInput.value = startOfYear.toISOString().split('T')[0];
-        if (endInput) endInput.value = today.toISOString().split('T')[0];
-      } else {
-        const past = new Date();
-        past.setDate(today.getDate() - Number(days));
-        if (startInput) startInput.value = past.toISOString().split('T')[0];
-        if (endInput) endInput.value = today.toISOString().split('T')[0];
-      }
-
-      document.querySelectorAll('.date-preset-btn').forEach(b => {
-        b.className = 'date-preset-btn text-[11px] font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer';
-      });
-      const btnId = isRunway ? 'preset-btn-runway' : (days === 'YTD' ? 'preset-btn-YTD' : `preset-btn-${days}`);
-      const activeBtn = document.getElementById(btnId);
-      if (activeBtn) {
-        activeBtn.className = 'date-preset-btn text-[11px] font-bold px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#915EFF] to-[#7c3aed] text-white shadow-xs shadow-[#915EFF]/30 transition cursor-pointer';
-      }
-
-      applyDateFilter();
-    }
-
-    function onCustomDateChange() {
-      document.querySelectorAll('.date-preset-btn').forEach(b => {
-        b.className = 'date-preset-btn text-[11px] font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer';
-      });
-      updateDateRangeBadge();
-    }
-
-    function updateDateRangeBadge() {
-      // Date badge text removed per user request
-    }
-
+    function initDateFilter() {}
+    function setDatePreset() {}
+    function onCustomDateChange() {}
+    function updateDateRangeBadge() {}
     async function applyDateFilter() {
-      const applyBtn = document.getElementById('btn-apply-dates');
-      const origHtml = applyBtn ? applyBtn.innerHTML : '';
-      if (applyBtn) {
-        applyBtn.disabled = true;
-        applyBtn.innerHTML = `
-          <svg class="w-3.5 h-3.5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-          </svg>
-          <span>Searching...</span>
-        `;
-      }
-      try {
-        await loadData(false);
-      } finally {
-        if (applyBtn) {
-          applyBtn.disabled = false;
-          applyBtn.innerHTML = origHtml;
-        }
-      }
+      await loadData(false);
     }
 
     async function loadData(syncBq = false, startDate = null, endDate = null) {
@@ -3328,7 +3207,6 @@
       const origHtml = syncBtn ? syncBtn.innerHTML : "";
 
       showTopLoadingBar();
-      initDateFilter();
       const sDate = startDate || document.getElementById("filter-start-date")?.value || "";
       const eDate = endDate || document.getElementById("filter-end-date")?.value || "";
 
@@ -3361,10 +3239,22 @@
           res = await fetch('/api/refresh-bq' + qs, { method: 'POST', headers });
           const json = await res.json();
           globalData = json.data || json;
-          showToast(`✅ BigQuery Synced: Live data loaded for ${sDate || 'start'} to ${eDate || 'end'}!`, "success");
+          showToast("✅ BigQuery Synced: Live operating pool updated!", "success");
         } else {
           res = await fetch('/api/data' + qs, { headers });
           globalData = await res.json();
+        }
+
+        // Dynamically update header active week badge from raw data if present
+        let latestWeek = "";
+        (globalData.raw_data || []).forEach(row => {
+          if (row.week_ending && (!latestWeek || row.week_ending > latestWeek)) {
+            latestWeek = row.week_ending;
+          }
+        });
+        const headerActiveWeekEl = document.getElementById("header-active-week");
+        if (headerActiveWeekEl && latestWeek) {
+          headerActiveWeekEl.textContent = `Week Ending: ${formatRosterDate(latestWeek)}`;
         }
 
         // Sanitize LDAP on all resources & customer portfolio to guarantee no raw emails (e.g. shubhampathakk@google.com -> shubhampathakk)

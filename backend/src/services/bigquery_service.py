@@ -65,10 +65,16 @@ def query_emea_delivery_data(
     Defaults to last 90 days if no date range is provided. Zero LIMIT applied.
     """
     today = datetime.date.today()
-    if not end_date:
-        end_date = today.strftime("%Y-%m-%d")
-    if not start_date:
+    if not end_date or not str(end_date).strip():
+        # Include upcoming cycle (+14 days) to guarantee coverage of current week Saturday
+        end_date = (today + datetime.timedelta(days=14)).strftime("%Y-%m-%d")
+    else:
+        end_date = str(end_date).strip()
+
+    if not start_date or not str(start_date).strip():
         start_date = (today - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+    else:
+        start_date = str(start_date).strip()
 
     query = """
     WITH target_resources AS (
@@ -171,10 +177,16 @@ def query_emea_pipeline_data(
     Defaults to last 90 days if no date range is provided. Zero LIMIT applied.
     """
     today = datetime.date.today()
-    if not end_date:
-        end_date = today.strftime("%Y-%m-%d")
-    if not start_date:
+    if not end_date or not str(end_date).strip():
+        # Pipeline deals close in future; default to upcoming 180 days for active in-flight opportunities
+        end_date = (today + datetime.timedelta(days=180)).strftime("%Y-%m-%d")
+    else:
+        end_date = str(end_date).strip()
+
+    if not start_date or not str(start_date).strip():
         start_date = (today - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+    else:
+        start_date = str(start_date).strip()
 
     query = """
     SELECT
