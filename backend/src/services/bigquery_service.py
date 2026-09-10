@@ -183,8 +183,8 @@ def query_emea_pipeline_data(
     """
     today = datetime.date.today()
     if not end_date or not str(end_date).strip():
-        # Pipeline deals close in future; default to upcoming 180 days for active in-flight opportunities
-        end_date = (today + datetime.timedelta(days=180)).strftime("%Y-%m-%d")
+        # Pipeline deals close in future; default to upcoming 365 days for full forward forecasting
+        end_date = (today + datetime.timedelta(days=365)).strftime("%Y-%m-%d")
     else:
         end_date = str(end_date).strip()
 
@@ -201,10 +201,18 @@ def query_emea_pipeline_data(
       stage_name,
       stage_simplified,
       forecast_category,
+      COALESCE(probability, 0) AS probability,
       'EMEA' AS region,
+      COALESCE(country, 'Unknown') AS country,
+      COALESCE(project_sub_region, '') AS project_sub_region,
+      COALESCE(offering, 'Standard PSO') AS offering,
+      COALESCE(dc_attached, false) AS dc_attached,
+      COALESCE(workload_id, opportunity_id) AS workload_id,
       COALESCE(total_sale_price_usd, 0) AS total_sale_price_usd,
       COALESCE(primary_solution, 'Cloud Solutions') AS solution,
-      close_date
+      COALESCE(consultant_hours_purchased, 0) AS consultant_hours_purchased,
+      COALESCE(sce_hours_purchased, 0) AS sce_hours_purchased,
+      CAST(close_date AS STRING) AS close_date
     FROM `concord-prod.service_cloudbi.pso_pipeline`
     WHERE pso_region LIKE '%EMEA%'
       AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.pso_pipeline`)

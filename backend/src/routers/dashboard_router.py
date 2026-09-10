@@ -186,50 +186,296 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
     total_scheduled_hrs = round(total_scheduled_hrs, 1)
     overall_util = round((total_scheduled_hrs / total_cap) * 100, 1) if total_cap > 0 else 60.0
 
+    # Helper: Map EMEA countries to canonical sub-regions
+    def _map_emea_subregion(country: str, sub_reg_raw: str = "") -> str:
+        c = (country or "").strip().lower()
+        sr = (sub_reg_raw or "").strip().lower()
+        if any(k in c or k in sr for k in ["germany", "deutschland", "austria", "switzerland", "dach"]):
+            return "Central Europe (DACH)"
+        if any(k in c or k in sr for k in ["united kingdom", "uk", "ireland", "britain"]):
+            return "UK & Ireland"
+        if any(k in c or k in sr for k in ["sweden", "norway", "denmark", "finland", "netherlands", "belgium", "luxembourg", "nordic", "benelux"]):
+            return "Nordics & Benelux"
+        return "Southern Europe & MEA"
+
+    def _get_horizon_bucket(close_date_str: str, today_date: datetime.date):
+        try:
+            dt = datetime.datetime.strptime(str(close_date_str)[:10], "%Y-%m-%d").date()
+            diff = (dt - today_date).days
+        except Exception:
+            return "8+ Weeks (31d+)", "8+ Weeks", 5
+        
+        if diff <= 7:
+            return "1 Week (Next 7d)", "1 Week", 1
+        elif diff <= 14:
+            return "2 Weeks (8–14d)", "2 Weeks", 2
+        elif diff <= 21:
+            return "3 Weeks (15–21d)", "3 Weeks", 3
+        elif diff <= 30:
+            return "4 Weeks (22–30d)", "4 Weeks", 4
+        else:
+            return "8+ Weeks (31d+)", "8+ Weeks", 5
+
     workloads = []
+    opportunities = []
     total_pipeline_val = 0.0
+    total_booked_val = 0.0
+    open_pipeline_val = 0.0
+    unique_pipeline_accounts = set()
+    open_opportunities_count = 0
+
+    reg_capture = {
+        "Central Europe (DACH)": {"counts": 0, "services_amount": 0.0, "total_acv": 0.0},
+        "UK & Ireland": {"counts": 0, "services_amount": 0.0, "total_acv": 0.0},
+        "Nordics & Benelux": {"counts": 0, "services_amount": 0.0, "total_acv": 0.0},
+        "Southern Europe & MEA": {"counts": 0, "services_amount": 0.0, "total_acv": 0.0},
+    }
+
+    health_counts = {
+        "Proposal & Negotiation": 0,
+        "Tech Evaluation": 0,
+        "Discovery & Qualify": 0,
+        "Signed & Delivery": 0
+    }
+
+    strategy_counts = {
+        "Delivery Center (GDC)": {"count": 0, "revenue": 0.0},
+        "Field PSO Consulting": {"count": 0, "revenue": 0.0},
+        "Specialized & Other": {"count": 0, "revenue": 0.0}
+    }
+
+    horizon_data = {
+        "1 Week": {"name": "1 Week (Next 7d)", "bucket": "1 Week", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
+        "2 Weeks": {"name": "2 Weeks (8–14d)", "bucket": "2 Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
+        "3 Weeks": {"name": "3 Weeks (15–21d)", "bucket": "3 Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
+        "4 Weeks": {"name": "4 Weeks (22–30d)", "bucket": "4 Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
+        "8+ Weeks": {"name": "8+ Weeks (31d+)", "bucket": "8+ Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
+    }
+
     for p in pipeline_rows:
-        val = float(p.get("total_sale_price_usd") or 0)
+        val = float(p.get("total_sale_price_usd") or 0.0)
         total_pipeline_val += val
+        acc_name = p.get("account_name") or "Strategic Partner"
+        stage_raw = str(p.get("stage_name") or "")
+        stage_simp = str(p.get("stage_simplified") or "")
+        c_date = str(p.get("close_date") or "")
+        is_signed = "04" in stage_raw or "signed" in stage_simp.lower() or "won" in stage_raw.lower()
+        
+        if is_signed:
+            total_booked_val += val
+            health_counts["Signed & Delivery"] += 1
+        elif "03" in stage_raw:
+            health_counts["Proposal & Negotiation"] += 1
+        elif "02" in stage_raw:
+            health_counts["Tech Evaluation"] += 1
+        else:
+            health_counts["Discovery & Qualify"] += 1
+
+        is_dc = str(p.get("dc_attached")).lower() == "true" or "delivery center" in str(p.get("offering") or "").lower()
+        if is_dc:
+            strategy_counts["Delivery Center (GDC)"]["count"] += 1
+            strategy_counts["Delivery Center (GDC)"]["revenue"] += val
+        elif any(k in str(p.get("offering") or "").lower() for k in ["consult", "standard", "deploy", "services"]):
+            strategy_counts["Field PSO Consulting"]["count"] += 1
+            strategy_counts["Field PSO Consulting"]["revenue"] += val
+        else:
+            strategy_counts["Specialized & Other"]["count"] += 1
+            strategy_counts["Specialized & Other"]["revenue"] += val
+
+        country = p.get("country") or "Unknown"
+        sub_reg = _map_emea_subregion(country, p.get("project_sub_region"))
+        reg_capture[sub_reg]["counts"] += 1
+        reg_capture[sub_reg]["total_acv"] += val
+        if is_dc:
+            reg_capture[sub_reg]["services_amount"] += val
+
+        prob = int(float(p.get("probability") or 0))
+        if prob == 0:
+            if "03" in stage_raw: prob = 50
+            elif "02" in stage_raw: prob = 30
+            elif is_signed: prob = 100
+            else: prob = 20
+
+        raw_cat = str(p.get("forecast_category") or "PIPELINE").upper()
+        if "COMMIT" in raw_cat or is_signed:
+            cat = "COMMIT"
+        elif "BEST" in raw_cat or "UPSIDE" in raw_cat:
+            cat = "UPSIDE"
+        else:
+            cat = "PIPELINE"
+
+        _, horizon_code, _ = _get_horizon_bucket(c_date, today)
+
+        c_hrs = float(p.get("consultant_hours_purchased") or 0.0) + float(p.get("sce_hours_purchased") or 0.0)
+        if 0 < c_hrs <= 2000:
+            req_fte = max(1.0, round(c_hrs / 160.0, 1))
+        elif val > 0:
+            req_fte = max(1.0, min(12.0, round(val / 75_000.0, 1)))
+        else:
+            req_fte = 2.0
+        weighted_fte = round(req_fte * (prob / 100.0), 1)
+
+        is_open = not is_signed
+        if is_open:
+            open_pipeline_val += val
+            open_opportunities_count += 1
+            unique_pipeline_accounts.add(acc_name)
+
+            if c_date:
+                try:
+                    dt = datetime.datetime.strptime(c_date[:10], "%Y-%m-%d").date()
+                    if dt >= today and horizon_code in horizon_data:
+                        h = horizon_data[horizon_code]
+                        h["opportunity_count"] += 1
+                        h["total_acv"] += val
+                        h["weighted_acv"] += val * (prob / 100.0)
+                        h["unweighted_fte"] = round(h["unweighted_fte"] + req_fte, 1)
+                        h["demand_fte"] = round(h["demand_fte"] + weighted_fte, 1)
+                        if acc_name not in h["accounts"] and len(h["accounts"]) < 4:
+                            h["accounts"].append(acc_name)
+                except Exception:
+                    pass
+
+        status_badge = "Delivered" if is_signed else ("Missing Date" if not c_date else "In-Flight")
         workloads.append({
-            "workload_id": p.get("opportunity_id") or "WL-100",
+            "workload_id": p.get("workload_id") or p.get("opportunity_id") or "WL-100",
             "workload_solution": p.get("solution") or "Cloud Infrastructure",
-            "account_name": p.get("account_name") or "Strategic Partner",
-            "region": p.get("region") or "EMEA",
-            "sub_region": "Western Europe",
-            "status": "In-Flight" if "Won" in str(p.get("stage_name")) or "Refine" in str(p.get("stage_name")) else "Delivered",
-            "program_manager": "PSO Lead",
-            "implementation_led_by": "PSO",
-            "partner": "Google Cloud PSO",
-            "services_revenue": f"${round(val):,}",
-            "schedule_date": str(p.get("close_date") or "2026-12-31")
+            "account_name": acc_name,
+            "region": "EMEA",
+            "sub_region": f"{sub_reg} ({country})" if country != "Unknown" else sub_reg,
+            "status": status_badge,
+            "program_manager": "PSO Delivery Lead",
+            "implementation_led_by": "Delivery Center (GDC)" if is_dc else "Field PSO",
+            "partner": p.get("offering") or "Google Cloud PSO",
+            "services_revenue": f"${round(val):,}" if val > 0 else "$0",
+            "schedule_date": c_date[:10] if c_date else "2026-12-31"
         })
 
-    if not workloads and delivery_rows:
-        for r in delivery_rows:
-            workloads.append({
-                "workload_id": str(r.get("project_id") or "WL-001")[:12],
-                "workload_solution": r.get("practice") or "Cloud Analytics",
-                "account_name": r.get("account_name") or "Enterprise Client",
-                "region": "EMEA",
-                "sub_region": "Central Europe",
-                "status": "In-Flight",
-                "program_manager": r.get("engagement_manager_name") or "Lead PM",
-                "implementation_led_by": "PSO",
-                "partner": "Google Cloud PSO",
-                "services_revenue": f"${int(float(r.get('proj_scheduled_hours') or 40) * 250):,}",
-                "schedule_date": str(r.get("project_end_date") or "2026-12-31")
-            })
-            total_pipeline_val += float(r.get("proj_scheduled_hours") or 40) * 250
+        opportunities.append({
+            "opportunity_id": p.get("opportunity_id") or "006...",
+            "opportunity_name": p.get("opp_name") or "Cloud Modernization Engagement",
+            "account_name": acc_name,
+            "horizon_bucket": horizon_code,
+            "close_date": c_date[:10] if c_date else "2026-12-31",
+            "category": cat,
+            "stage": stage_raw or "02 - Solution Dev",
+            "probability_pct": prob,
+            "required_resources": req_fte,
+            "weighted_demand_fte": weighted_fte,
+            "acv_formatted": f"${(val / 1_000_000):.2f}M" if val >= 1_000_000 else (f"${int(val / 1000):,}k" if val > 0 else "$0"),
+            "weighted_acv_formatted": f"${(val * (prob / 100.0) / 1_000_000):.2f}M" if val >= 1_000_000 else (f"${int(val * (prob / 100.0) / 1000):,}k" if val > 0 else "$0"),
+            "workload_solution": p.get("solution") or "Cloud Solutions",
+            "industry": country if country != "Unknown" else "EMEA"
+        })
+
+    # Available engineering supply comparison (Bench + Roll-offs from delivery)
+    roll_offs_by_horizon = {"1 Week": 0, "2 Weeks": 0, "3 Weeks": 0, "4 Weeks": 0, "8+ Weeks": 0}
+    for r in resources_list:
+        max_end = ""
+        for a in r.get("assignments", []):
+            a_end = a.get("end", "")
+            if a_end and a_end > max_end:
+                max_end = a_end
+        if max_end:
+            try:
+                dt = datetime.datetime.strptime(max_end[:10], "%Y-%m-%d").date()
+                diff = (dt - today).days
+                if 0 <= diff <= 7: roll_offs_by_horizon["1 Week"] += 1
+                elif 8 <= diff <= 14: roll_offs_by_horizon["2 Weeks"] += 1
+                elif 15 <= diff <= 21: roll_offs_by_horizon["3 Weeks"] += 1
+                elif 22 <= diff <= 30: roll_offs_by_horizon["4 Weeks"] += 1
+                elif diff >= 31: roll_offs_by_horizon["8+ Weeks"] += 1
+            except Exception:
+                pass
+
+    cum_supply = bench_count
+    buckets_list = []
+    total_forward_weighted_acv = 0.0
+    total_forward_demand_fte = 0.0
+
+    for b_key in ["1 Week", "2 Weeks", "3 Weeks", "4 Weeks", "8+ Weeks"]:
+        b_info = horizon_data[b_key]
+        cum_supply += roll_offs_by_horizon.get(b_key, 0)
+        net_bal = round(cum_supply - b_info["demand_fte"], 1)
+        total_forward_weighted_acv += b_info["weighted_acv"]
+        total_forward_demand_fte += b_info["demand_fte"]
+
+        buckets_list.append({
+            "name": b_info["name"],
+            "bucket": b_info["bucket"],
+            "opportunity_count": b_info["opportunity_count"],
+            "total_acv": b_info["total_acv"],
+            "total_acv_formatted": f"${(b_info['total_acv'] / 1_000_000):.2f}M",
+            "weighted_acv": b_info["weighted_acv"],
+            "weighted_acv_formatted": f"${(b_info['weighted_acv'] / 1_000_000):.2f}M",
+            "available_supply_fte": cum_supply,
+            "unweighted_fte": b_info["unweighted_fte"],
+            "demand_fte": b_info["demand_fte"],
+            "net_balance_fte": net_bal,
+            "status": "SURPLUS" if net_bal >= 0 else "DEFICIT",
+            "accounts": b_info["accounts"]
+        })
+
+    demand_timeline = {
+        "total_forward_weighted_acv": f"${(total_forward_weighted_acv / 1_000_000):.2f}M",
+        "total_forward_demand_fte": round(total_forward_demand_fte, 1),
+        "buckets": buckets_list
+    }
+
+    tot_reg_val = sum(r["total_acv"] for r in reg_capture.values()) or 1.0
+    regional_capture_list = [
+        {
+            "region": reg_name,
+            "counts": r["counts"],
+            "services_amount": f"${(r['services_amount'] / 1_000_000):.2f}M",
+            "total_acv": f"${(r['total_acv'] / 1_000_000):.2f}M",
+            "pct": round((r["total_acv"] / tot_reg_val) * 100, 1)
+        }
+        for reg_name, r in reg_capture.items()
+    ]
+
+    tot_health = sum(health_counts.values()) or 1
+    health_colors = {
+        "Proposal & Negotiation": "bg-emerald-500",
+        "Tech Evaluation": "bg-indigo-500",
+        "Discovery & Qualify": "bg-amber-400",
+        "Signed & Delivery": "bg-purple-600"
+    }
+    workload_health_list = [
+        {
+            "status": stage_k,
+            "count": cnt,
+            "pct": round((cnt / tot_health) * 100, 1),
+            "color": health_colors.get(stage_k, "bg-slate-500")
+        }
+        for stage_k, cnt in health_counts.items()
+    ]
+
+    tot_strat_cnt = sum(s["count"] for s in strategy_counts.values()) or 1
+    strat_colors = {
+        "Delivery Center (GDC)": "bg-indigo-600",
+        "Field PSO Consulting": "bg-emerald-500",
+        "Specialized & Other": "bg-amber-500"
+    }
+    delivery_strategy_list = [
+        {
+            "led_by": strat_k,
+            "count": s_val["count"],
+            "revenue": f"${(s_val['revenue'] / 1_000_000):.2f}M",
+            "pct": round((s_val["count"] / tot_strat_cnt) * 100, 1),
+            "color": strat_colors.get(strat_k, "bg-slate-500")
+        }
+        for strat_k, s_val in strategy_counts.items()
+    ]
 
     customers_list = list(customer_map.values())
 
     gtm_summary = {
-        "ps_engagement_formatted": f"${(total_pipeline_val / 1_000_000):.2f}M" if total_pipeline_val > 0 else "$24.80M",
-        "pipeline_acv_formatted": f"${(total_pipeline_val * 4.5 / 1_000_000):.2f}M" if total_pipeline_val > 0 else "$115.40M",
-        "unique_customers": len(customers_list) or 56,
-        "total_workloads": len(workloads) or 120,
-        "active_opportunities": len(pipeline_rows) or 48
+        "ps_engagement_formatted": f"${(total_booked_val / 1_000_000):.2f}M" if total_booked_val > 0 else f"${(total_pipeline_val * 0.25 / 1_000_000):.2f}M",
+        "pipeline_acv_formatted": f"${(open_pipeline_val / 1_000_000):.2f}M" if open_pipeline_val > 0 else f"${(total_pipeline_val / 1_000_000):.2f}M",
+        "unique_customers": len(unique_pipeline_accounts) or len(customers_list),
+        "total_workloads": len(workloads),
+        "active_opportunities": open_opportunities_count or len(pipeline_rows)
     }
 
     return {
@@ -247,24 +493,12 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         "customerPortfolio": customers_list,
         "gtm": {
             "summary": gtm_summary,
-            "regional_capture": [
-                {"region": "UK & Ireland", "counts": int(len(delivery_rows) * 0.35), "services_amount": "$10.50M", "total_acv": "$48.20M", "pct": 35.0},
-                {"region": "Central Europe (DACH)", "counts": int(len(delivery_rows) * 0.30), "services_amount": "$8.20M", "total_acv": "$39.10M", "pct": 30.0},
-                {"region": "Southern Europe & MEA", "counts": int(len(delivery_rows) * 0.20), "services_amount": "$6.10M", "total_acv": "$28.10M", "pct": 20.0},
-                {"region": "Nordics & Benelux", "counts": int(len(delivery_rows) * 0.15), "services_amount": "$4.20M", "total_acv": "$19.60M", "pct": 15.0}
-            ],
-            "workload_health": [
-                {"status": "In-Flight", "count": int(len(workloads) * 0.6) or 30, "pct": 60.0, "color": "bg-indigo-500"},
-                {"status": "Delivered", "count": int(len(workloads) * 0.3) or 15, "pct": 30.0, "color": "bg-emerald-500"},
-                {"status": "Missing Date", "count": int(len(workloads) * 0.1) or 5, "pct": 10.0, "color": "bg-amber-400"}
-            ],
-            "delivery_strategy": [
-                {"led_by": "PSO", "count": int(len(workloads) * 0.5) or 25, "revenue": gtm_summary["ps_engagement_formatted"], "pct": 50.0, "color": "bg-indigo-600"},
-                {"led_by": "Partner", "count": int(len(workloads) * 0.3) or 15, "revenue": "$5.20M", "pct": 30.0, "color": "bg-emerald-500"},
-                {"led_by": "Customer", "count": int(len(workloads) * 0.2) or 10, "revenue": "$3.10M", "pct": 20.0, "color": "bg-amber-500"}
-            ],
+            "regional_capture": regional_capture_list,
+            "workload_health": workload_health_list,
+            "delivery_strategy": delivery_strategy_list,
+            "demand_timeline": demand_timeline,
             "workloads": workloads,
-            "opportunities": pipeline_rows
+            "opportunities": opportunities
         },
         "raw_data": delivery_rows
     }

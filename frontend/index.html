@@ -434,7 +434,7 @@
         </button>
         <button onclick="switchTab('gtm')" id="tab-btn-gtm" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          <span>GTM &amp; Sales Pipeline</span>
+          <span>Sales Pipeline &amp; Demand</span>
           <span id="nav-gtm-count" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full">120</span>
         </button>
       </div>
@@ -1261,7 +1261,7 @@
     </div>
 
     <!-- ========================================================================= -->
-    <!-- TAB 7: GLOBAL EMEA GTM DASHBOARD (Exact Match to Reference Design) -->
+    <!-- TAB 7: EMEA SALES PIPELINE & FORWARD DEMAND -->
     <!-- ========================================================================= -->
     <div id="view-gtm" class="flex flex-col gap-6 hidden">
 
@@ -1270,13 +1270,13 @@
         <div>
           <div class="text-[11px] font-bold tracking-wider uppercase text-blue-600">Real-Time Forecasting</div>
           <div class="flex items-center gap-2 mt-0.5">
-            <h2 class="font-title text-2xl font-bold tracking-tight text-slate-900">EMEA GTM Dashboard</h2>
-            <span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">WIP (Work in Progress)</span>
+            <h2 class="font-title text-2xl font-bold tracking-tight text-slate-900">EMEA Sales Pipeline &amp; Forward Demand</h2>
+            <span class="bg-indigo-50 text-indigo-800 border border-indigo-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Live Pipeline Intelligence</span>
           </div>
-          <p class="text-xs text-slate-500 mt-1">Revenue Prediction, Operational Workload Pipeline &amp; Implementation Strategy</p>
+          <p class="text-xs text-slate-500 mt-1">Live CRM Opportunities, Sizing Models, and Capacity vs. Demand Gap Analysis</p>
         </div>
         <div class="flex items-center gap-2.5">
-          <button onclick="renderGtmView()" class="bg-slate-50 hover:bg-slate-100 text-slate-600 p-2.5 rounded-xl border border-slate-200 transition shadow-2xs cursor-pointer" title="Refresh GTM Data">
+          <button onclick="renderGtmView()" class="bg-slate-50 hover:bg-slate-100 text-slate-600 p-2.5 rounded-xl border border-slate-200 transition shadow-2xs cursor-pointer" title="Refresh Pipeline Data">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3 3L22 4"></path>
             </svg>
@@ -1284,11 +1284,11 @@
         </div>
       </div>
 
-      <!-- GTM Filters Bar with Search Button -->
+      <!-- Pipeline Filters Bar with Search Button -->
       <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         <div class="flex items-center gap-2 flex-1">
           <div class="relative flex-1">
-            <input type="text" id="gtm-search-input" onkeyup="if(event.key===&#39;Enter&#39;) filterGtmAll()" placeholder="Search Account, Solution, Opportunity, Partner, Workload ID..." class="w-full bg-slate-50 text-xs border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:border-indigo-500 shadow-2xs">
+            <input type="text" id="gtm-search-input" onkeyup="if(event.key==='Enter') filterGtmAll()" placeholder="Search Account, Solution, Opportunity, Country, Workload ID..." class="w-full bg-slate-50 text-xs border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:border-indigo-500 shadow-2xs">
             <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
@@ -1328,10 +1328,8 @@
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">LEAD BY</span>
             <select id="gtm-filter-lead" onchange="filterGtmAll()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none">
               <option value="ALL">All</option>
-              <option value="Customer">Customer</option>
-              <option value="Partner">Partner</option>
-              <option value="PSO">PSO</option>
-              <option value="Unknown">Unknown</option>
+              <option value="Delivery Center (GDC)">Delivery Center (GDC)</option>
+              <option value="Field PSO">Field PSO</option>
             </select>
           </div>
 
@@ -1349,12 +1347,11 @@
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">SOLUTION</span>
             <select id="gtm-filter-sol" onchange="filterGtmAll()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none">
               <option value="ALL">All Focus Solutions</option>
-              <option value="CES">CES / Agent Studio</option>
-              <option value="Dialogflow">Dialogflow CX / ES</option>
-              <option value="Agent Assist">Agent Assist</option>
-              <option value="Insights">CX Insights</option>
-              <option value="CCaaS">CCaaS</option>
-              <option value="Vertex">Vertex AI Search</option>
+              <option value="Cloud Solutions">Cloud Solutions</option>
+              <option value="Cloud Infrastructure">Cloud Infrastructure</option>
+              <option value="Cloud Analytics">Cloud Analytics</option>
+              <option value="Security">Security</option>
+              <option value="CES">CES / AI</option>
             </select>
           </div>
         </div>
@@ -1363,47 +1360,47 @@
       <!-- 5 Top KPI Cards Row -->
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
 
-        <!-- 1. Total PS Engagement -->
+        <!-- 1. Total Services Booked -->
         <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">TOTAL PS ENGAGEMENT</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">SERVICES BOOKED</span>
             <div class="w-7 h-7 rounded-xl bg-purple-50 text-purple-600 font-bold flex items-center justify-center text-xs shadow-2xs">
               $</div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-ps-eng">$19.82M</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-ps-eng">$146.48M</div>
           <div class="text-[11px] text-indigo-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6">
               </path>
             </svg>
-            GCC Services / PSO Booked
+            Signed &amp; Booked Services Value
           </div>
         </div>
 
         <!-- 2. EMEA Pipeline (ACV) -->
         <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">EMEA PIPELINE (ACV)</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">OPEN PIPELINE (ACV)</span>
             <div class="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-2xs">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-acv">$83.65M</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-acv">$420.99M</div>
           <div class="text-[11px] text-emerald-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6">
               </path>
             </svg>
-            Conversational AI Pipeline ACV
+            Active Open Pipeline ACV
           </div>
         </div>
 
         <!-- 3. Unique EMEA Accounts -->
         <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">UNIQUE EMEA ACCOUNTS</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">CLIENT ACCOUNTS</span>
             <div class="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-2xs">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
@@ -1411,20 +1408,20 @@
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-customers">30</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-customers">373</div>
           <div class="text-[11px] text-amber-700 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
               </path>
             </svg>
-            71 Staffed • 114 Pipeline Targets
+            Enterprise Accounts in Funnel
           </div>
         </div>
 
         <!-- 4. EMEA Workloads -->
         <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">EMEA WORKLOADS</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">WORKLOAD RECORDS</span>
             <div class="w-7 h-7 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center shadow-2xs">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
@@ -1432,60 +1429,60 @@
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-workloads">30</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-workloads">5,000</div>
           <div class="text-[11px] text-pink-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
               </path>
             </svg>
-            Configured EMEA delivery tracks
+            Configured Pipeline Workloads
           </div>
         </div>
 
         <!-- 5. Active EMEA Deals -->
         <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">ACTIVE EMEA DEALS</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">ACTIVE OPPORTUNITIES</span>
             <div class="w-7 h-7 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-2xs">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-opps">30</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-opps">1,191</div>
           <div class="text-[11px] text-blue-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6">
               </path>
             </svg>
-            30 Priority Strategic • 18 Mid-Market
+            Open Deals in Funnel
           </div>
         </div>
 
       </div>
 
-      <!-- 3 GTM Sub-Navigation Tabs Bar -->
+      <!-- 3 Sub-Navigation Tabs Bar -->
       <div class="bg-white rounded-2xl border border-slate-200/80 p-1.5 shadow-sm flex gap-2">
-        <button onclick="switchGtmSubtab(&#39;exec&#39;)" id="gtm-subtab-exec" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-[#4f46e5] text-white shadow-sm">
+        <button onclick="switchGtmSubtab('exec')" id="gtm-subtab-exec" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-[#4f46e5] text-white shadow-sm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          Executive Forecasting Overview
+          Executive Forecasting
         </button>
 
-        <button onclick="switchGtmSubtab(&#39;workload&#39;)" id="gtm-subtab-workload" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-transparent text-slate-600 hover:bg-slate-50">
+        <button onclick="switchGtmSubtab('workload')" id="gtm-subtab-workload" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-transparent text-slate-600 hover:bg-slate-50">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
             </path>
           </svg>
-          PSO Workload Matrix (320)
+          Opportunity &amp; Workload Matrix
         </button>
 
-        <button onclick="switchGtmSubtab(&#39;ledger&#39;)" id="gtm-subtab-ledger" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-transparent text-slate-600 hover:bg-slate-50">
+        <button onclick="switchGtmSubtab('ledger')" id="gtm-subtab-ledger" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-transparent text-slate-600 hover:bg-slate-50">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
           </svg>
-          Opportunities Ledger (30 Priority Deals / 48 Active)
+          Resource Demand &amp; Sizing Horizon
         </button>
       </div>
 
@@ -1510,61 +1507,7 @@
           </div>
 
           <div class="flex flex-col gap-4 pt-1" id="gtm-regional-capture-list">
-            <div class="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs mb-1">
-                <span class="font-bold text-slate-900">EMEA</span>
-                <span class="text-[11px] text-slate-400 font-medium">Counts: 16</span>
-              </div>
-              <div class="text-[11px] text-indigo-600 font-medium mb-1.5">Services Amount: <span class="font-bold">$9.40M</span></div>
-              <div class="flex justify-between text-[11px] font-bold text-slate-800 mb-1">
-                <span>Total ACV: $48.05M</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width: 57.4%"></div>
-              </div>
-            </div>
-          
-            <div class="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs mb-1">
-                <span class="font-bold text-slate-900">EMEA</span>
-                <span class="text-[11px] text-slate-400 font-medium">Counts: 4</span>
-              </div>
-              <div class="text-[11px] text-indigo-600 font-medium mb-1.5">Services Amount: <span class="font-bold">$5.15M</span></div>
-              <div class="flex justify-between text-[11px] font-bold text-slate-800 mb-1">
-                <span>Total ACV: $13.10M</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width: 15.7%"></div>
-              </div>
-            </div>
-          
-            <div class="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs mb-1">
-                <span class="font-bold text-slate-900">EMEA</span>
-                <span class="text-[11px] text-slate-400 font-medium">Counts: 4</span>
-              </div>
-              <div class="text-[11px] text-indigo-600 font-medium mb-1.5">Services Amount: <span class="font-bold">$2.05M</span></div>
-              <div class="flex justify-between text-[11px] font-bold text-slate-800 mb-1">
-                <span>Total ACV: $11.60M</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width: 13.9%"></div>
-              </div>
-            </div>
-          
-            <div class="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs mb-1">
-                <span class="font-bold text-slate-900">EMEA</span>
-                <span class="text-[11px] text-slate-400 font-medium">Counts: 4</span>
-              </div>
-              <div class="text-[11px] text-indigo-600 font-medium mb-1.5">Services Amount: <span class="font-bold">$2.02M</span></div>
-              <div class="flex justify-between text-[11px] font-bold text-slate-800 mb-1">
-                <span>Total ACV: $9.95M</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width: 11.9%"></div>
-              </div>
-            </div>
+            <div class="p-6 text-center text-slate-400 text-xs">Loading regional capture...</div>
           </div>
         </div>
 
@@ -1583,35 +1526,7 @@
           </div>
 
           <div class="flex flex-col gap-4 pt-1" id="gtm-workload-health-list">
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">Delivered</span>
-                <span class="font-bold text-slate-900">21 Workloads (70%)</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-emerald-500 h-2.5 rounded-full transition-all" style="width: 70%"></div>
-              </div>
-            </div>
-          
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">In-Flight</span>
-                <span class="font-bold text-slate-900">7 Workloads (23.3%)</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-indigo-500 h-2.5 rounded-full transition-all" style="width: 23.3%"></div>
-              </div>
-            </div>
-          
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">Missing Date</span>
-                <span class="font-bold text-slate-900">2 Workloads (6.7%)</span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-amber-400 h-2.5 rounded-full transition-all" style="width: 6.7%"></div>
-              </div>
-            </div>
+            <div class="p-6 text-center text-slate-400 text-xs">Loading pipeline health...</div>
           </div>
         </div>
 
@@ -1630,46 +1545,9 @@
           </div>
 
           <div class="flex flex-col gap-4 pt-1" id="gtm-delivery-strategy-list">
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">Partner</span>
-                <span class="text-[11px] text-slate-500">13 items • <strong class="text-slate-900">$11.32M</strong></span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-emerald-500 h-2.5 rounded-full transition-all" style="width: 43.3%"></div>
-              </div>
-            </div>
-          
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">PSO</span>
-                <span class="text-[11px] text-slate-500">6 items • <strong class="text-slate-900">$8.50M</strong></span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-indigo-600 h-2.5 rounded-full transition-all" style="width: 20%"></div>
-              </div>
-            </div>
-          
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">Customer</span>
-                <span class="text-[11px] text-slate-500">9 items • <strong class="text-slate-900">$0.00M</strong></span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-amber-500 h-2.5 rounded-full transition-all" style="width: 30%"></div>
-              </div>
-            </div>
-          
-            <div class="flex flex-col gap-1.5 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div class="flex justify-between items-center text-xs font-semibold">
-                <span class="text-slate-800">Unknown</span>
-                <span class="text-[11px] text-slate-500">2 items • <strong class="text-slate-900">$0.00M</strong></span>
-              </div>
-              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div class="bg-slate-400 h-2.5 rounded-full transition-all" style="width: 6.7%"></div>
-              </div>
-            </div>
+            <div class="p-6 text-center text-slate-400 text-xs">Loading delivery strategy...</div>
           </div>
+        </div>
         </div>
 
       </div>
@@ -1704,40 +1582,9 @@
                 <th class="p-3.5 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody id="gtm-workload-tbody" class="divide-y divide-slate-100 text-slate-700"><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Verizon Communications Inc.</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US TMEG</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Customer Experience Agent Studio (CES)</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000008r3TWAQ</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Narges Asli</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Customer</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Tata Consultancy Services Limited</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-04-30</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Verizon&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
+            <tbody id="gtm-workload-tbody" class="divide-y divide-slate-100 text-slate-700">
+              <tr><td colspan="9" class="p-8 text-center text-slate-400 text-xs">Loading authentic pipeline workloads...</td></tr>
+            </tbody><tr class="hover:bg-slate-50/80 transition">
           <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Verizon Communications Inc.</td>
           <td class="p-3.5 border-b border-slate-100">
             <div class="font-bold text-slate-900">EMEA</div>
@@ -2040,12 +1887,8 @@
 
         <!-- Workloads Pagination Controls -->
         <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
-          <div id="gtm-workload-pagination-info">Showing 1 - 10 of 30 workloads</div>
-          <div class="flex items-center gap-1.5" id="gtm-workload-pagination-btns">
-          <button onclick="changeGtmWorkloadPage(0)" disabled="" class="px-2.5 py-1 rounded bg-slate-100 text-slate-300 cursor-not-allowed">« Prev</button>
-          <span class="px-2 font-bold text-slate-700">Page 1 of 3</span>
-          <button onclick="changeGtmWorkloadPage(2)" class="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition">Next »</button>
-        </div>
+          <div id="gtm-workload-pagination-info">Showing workloads...</div>
+          <div class="flex items-center gap-1.5" id="gtm-workload-pagination-btns"></div>
         </div>
       </div>
 
@@ -2073,112 +1916,7 @@
           </div>
 
           <!-- 5 Horizon Metric Cards -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" id="gtm-horizon-cards-container"><div class="bg-slate-50/80 hover:bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between gap-2.5 transition cursor-pointer shadow-2xs hover:border-rose-300">
-          <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold text-slate-800 uppercase tracking-wider">1 Week (Next 7d)</span>
-            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
-              ⚠ Deficit (-12 FTE)
-            </span>
-          </div>
-          <div>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-xl font-extrabold text-slate-900">21</span>
-              <span class="text-[11px] font-bold text-indigo-600">FTE Demand</span>
-            </div>
-            <div class="text-[11px] text-slate-500 mt-0.5 flex justify-between">
-              <span>6 Deals • $18.05M</span>
-              <span class="font-bold text-slate-700">Wtd: $15.74M</span>
-            </div>
-          </div>
-          <div class="pt-1.5 border-t border-slate-200/60 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Supply: <strong>9 FTE</strong></span>
-            <span class="text-indigo-600 font-semibold hover:underline">Filter Deals →</span>
-          </div>
-        </div><div class="bg-slate-50/80 hover:bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between gap-2.5 transition cursor-pointer shadow-2xs hover:border-indigo-300">
-          <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold text-slate-800 uppercase tracking-wider">2 Weeks (8–14d)</span>
-            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
-              ✓ Surplus (+5.8 FTE)
-            </span>
-          </div>
-          <div>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-xl font-extrabold text-slate-900">10.2</span>
-              <span class="text-[11px] font-bold text-indigo-600">FTE Demand</span>
-            </div>
-            <div class="text-[11px] text-slate-500 mt-0.5 flex justify-between">
-              <span>5 Deals • $11.05M</span>
-              <span class="font-bold text-slate-700">Wtd: $6.14M</span>
-            </div>
-          </div>
-          <div class="pt-1.5 border-t border-slate-200/60 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Supply: <strong>16 FTE</strong></span>
-            <span class="text-indigo-600 font-semibold hover:underline">Filter Deals →</span>
-          </div>
-        </div><div class="bg-slate-50/80 hover:bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between gap-2.5 transition cursor-pointer shadow-2xs hover:border-indigo-300">
-          <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold text-slate-800 uppercase tracking-wider">3 Weeks (15–21d)</span>
-            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
-              ✓ Surplus (+4.5 FTE)
-            </span>
-          </div>
-          <div>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-xl font-extrabold text-slate-900">16.5</span>
-              <span class="text-[11px] font-bold text-indigo-600">FTE Demand</span>
-            </div>
-            <div class="text-[11px] text-slate-500 mt-0.5 flex justify-between">
-              <span>5 Deals • $14.50M</span>
-              <span class="font-bold text-slate-700">Wtd: $11.55M</span>
-            </div>
-          </div>
-          <div class="pt-1.5 border-t border-slate-200/60 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Supply: <strong>21 FTE</strong></span>
-            <span class="text-indigo-600 font-semibold hover:underline">Filter Deals →</span>
-          </div>
-        </div><div class="bg-slate-50/80 hover:bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between gap-2.5 transition cursor-pointer shadow-2xs hover:border-indigo-300">
-          <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold text-slate-800 uppercase tracking-wider">4 Weeks (22–30d)</span>
-            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
-              ✓ Surplus (+15.8 FTE)
-            </span>
-          </div>
-          <div>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-xl font-extrabold text-slate-900">19.2</span>
-              <span class="text-[11px] font-bold text-indigo-600">FTE Demand</span>
-            </div>
-            <div class="text-[11px] text-slate-500 mt-0.5 flex justify-between">
-              <span>7 Deals • $19.20M</span>
-              <span class="font-bold text-slate-700">Wtd: $13.36M</span>
-            </div>
-          </div>
-          <div class="pt-1.5 border-t border-slate-200/60 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Supply: <strong>35 FTE</strong></span>
-            <span class="text-indigo-600 font-semibold hover:underline">Filter Deals →</span>
-          </div>
-        </div><div class="bg-slate-50/80 hover:bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between gap-2.5 transition cursor-pointer shadow-2xs hover:border-indigo-300">
-          <div class="flex justify-between items-start">
-            <span class="text-[11px] font-bold text-slate-800 uppercase tracking-wider">8+ Weeks (31d+)</span>
-            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
-              ✓ Surplus (+28.4 FTE)
-            </span>
-          </div>
-          <div>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-xl font-extrabold text-slate-900">18.6</span>
-              <span class="text-[11px] font-bold text-indigo-600">FTE Demand</span>
-            </div>
-            <div class="text-[11px] text-slate-500 mt-0.5 flex justify-between">
-              <span>7 Deals • $20.85M</span>
-              <span class="font-bold text-slate-700">Wtd: $14.80M</span>
-            </div>
-          </div>
-          <div class="pt-1.5 border-t border-slate-200/60 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Supply: <strong>47 FTE</strong></span>
-            <span class="text-indigo-600 font-semibold hover:underline">Filter Deals →</span>
-          </div>
-        </div></div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" id="gtm-horizon-cards-container"></div>
         </div>
 
         <!-- Supply vs Forecasted Demand Gap Analysis Card -->
@@ -2208,72 +1946,9 @@
                   <th class="p-3 text-right">Key Target Accounts</th>
                 </tr>
               </thead>
-              <tbody id="gtm-supply-demand-tbody" class="divide-y divide-slate-100 text-slate-700"><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3 font-bold text-slate-900">1 Week (Next 7d)</td>
-          <td class="p-3 font-semibold text-slate-800">6 Active Deals</td>
-          <td class="p-3">
-            <span class="font-bold text-slate-900">$18.05M</span>
-            <span class="text-[10px] text-slate-400 block font-medium">Weighted: $15.74M</span>
-          </td>
-          <td class="p-3 font-extrabold text-blue-700">9 FTEs</td>
-          <td class="p-3 font-extrabold text-purple-700">21 FTEs <span class="text-[10px] text-slate-400 font-normal">(25 unweighted)</span></td>
-          <td class="p-3"><span class="bg-rose-50 text-rose-700 border border-rose-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">🔴 Deficit (-12 FTEs)</span></td>
-          <td class="p-3 text-right">
-            <div class="text-xs text-slate-600 font-medium truncate max-w-xs ml-auto">Verizon Communications Inc., Lloyds Banking Group (LBG), Best Buy</div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3 font-bold text-slate-900">2 Weeks (8–14d)</td>
-          <td class="p-3 font-semibold text-slate-800">5 Active Deals</td>
-          <td class="p-3">
-            <span class="font-bold text-slate-900">$11.05M</span>
-            <span class="text-[10px] text-slate-400 block font-medium">Weighted: $6.14M</span>
-          </td>
-          <td class="p-3 font-extrabold text-blue-700">16 FTEs</td>
-          <td class="p-3 font-extrabold text-purple-700">10.2 FTEs <span class="text-[10px] text-slate-400 font-normal">(18 unweighted)</span></td>
-          <td class="p-3"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">🟢 Surplus (+5.8 FTEs)</span></td>
-          <td class="p-3 text-right">
-            <div class="text-xs text-slate-600 font-medium truncate max-w-xs ml-auto">Macy's, Macy's (Bloomingdale's), Deutsche Bank</div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3 font-bold text-slate-900">3 Weeks (15–21d)</td>
-          <td class="p-3 font-semibold text-slate-800">5 Active Deals</td>
-          <td class="p-3">
-            <span class="font-bold text-slate-900">$14.50M</span>
-            <span class="text-[10px] text-slate-400 block font-medium">Weighted: $11.55M</span>
-          </td>
-          <td class="p-3 font-extrabold text-blue-700">21 FTEs</td>
-          <td class="p-3 font-extrabold text-purple-700">16.5 FTEs <span class="text-[10px] text-slate-400 font-normal">(21 unweighted)</span></td>
-          <td class="p-3"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">🟢 Surplus (+4.5 FTEs)</span></td>
-          <td class="p-3 text-right">
-            <div class="text-xs text-slate-600 font-medium truncate max-w-xs ml-auto">Lumen Technologies, American International Group (AIG), T-Mobile US</div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3 font-bold text-slate-900">4 Weeks (22–30d)</td>
-          <td class="p-3 font-semibold text-slate-800">7 Active Deals</td>
-          <td class="p-3">
-            <span class="font-bold text-slate-900">$19.20M</span>
-            <span class="text-[10px] text-slate-400 block font-medium">Weighted: $13.36M</span>
-          </td>
-          <td class="p-3 font-extrabold text-blue-700">35 FTEs</td>
-          <td class="p-3 font-extrabold text-purple-700">19.2 FTEs <span class="text-[10px] text-slate-400 font-normal">(28 unweighted)</span></td>
-          <td class="p-3"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">🟢 Surplus (+15.8 FTEs)</span></td>
-          <td class="p-3 text-right">
-            <div class="text-xs text-slate-600 font-medium truncate max-w-xs ml-auto">Comcast Corporation, Sky, Home Depot</div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3 font-bold text-slate-900">8+ Weeks (31d+)</td>
-          <td class="p-3 font-semibold text-slate-800">7 Active Deals</td>
-          <td class="p-3">
-            <span class="font-bold text-slate-900">$20.85M</span>
-            <span class="text-[10px] text-slate-400 block font-medium">Weighted: $14.80M</span>
-          </td>
-          <td class="p-3 font-extrabold text-blue-700">47 FTEs</td>
-          <td class="p-3 font-extrabold text-purple-700">18.6 FTEs <span class="text-[10px] text-slate-400 font-normal">(28 unweighted)</span></td>
-          <td class="p-3"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">🟢 Surplus (+28.4 FTEs)</span></td>
-          <td class="p-3 text-right">
-            <div class="text-xs text-slate-600 font-medium truncate max-w-xs ml-auto">Walmart Inc., Mercado Libre, Samsung Electronics</div>
-          </td>
-        </tr></tbody>
+              <tbody id="gtm-supply-demand-tbody" class="divide-y divide-slate-100 text-slate-700">
+              <tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">Calculating capacity vs. demand timeline...</td></tr>
+            </tbody>
             </table>
           </div>
         </div>
@@ -2319,408 +1994,16 @@
                   <th class="p-3.5 font-semibold text-right">Pre-Staff Action</th>
                 </tr>
               </thead>
-              <tbody id="gtm-ledger-tbody" class="divide-y divide-slate-100 text-slate-700"><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Verizon Communications Inc.</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000J9iVxIAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">Verizon_CES_CCaaS Solution</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">1 Week</span>
-              <span>Target Close: <strong>2026-08-28</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">PIPELINE</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">02 - Tech Eval/Solution Dev</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">40%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">3 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 40%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">1.2 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">40% × 3 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$1.00M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $400.0K</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000J9iVxIAJ&#39;, &#39;Verizon Communications Inc.&#39;, 3, &#39;1 Week&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Lloyds Banking Group (LBG)</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000LBG04IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">LBG - Intelligent Banking Assistant</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">1 Week</span>
-              <span>Target Close: <strong>2026-08-27</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#f0fdf4] text-[#166534] border border-[#bbf7d0] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">COMMIT</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">04 - Contract / Mobilize</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">90%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">5 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 90%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">4.5 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">90% × 5 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$4.50M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $4.05M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000LBG04IAJ&#39;, &#39;Lloyds Banking Group (LBG)&#39;, 5, &#39;1 Week&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Best Buy</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000BBY11IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">Best Buy TotalTech Virtual Agent</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">1 Week</span>
-              <span>Target Close: <strong>2026-08-26</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#f0fdf4] text-[#166534] border border-[#bbf7d0] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">COMMIT</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">04 - Contract / Mobilize</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">90%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">4 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 90%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">3.6 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">90% × 4 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$2.60M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $2.34M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000BBY11IAJ&#39;, &#39;Best Buy&#39;, 4, &#39;1 Week&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">AT&amp;T Inc.</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000ATT12IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">AT&amp;T CCaaS &amp; Agent Assist #NextGen</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">1 Week</span>
-              <span>Target Close: <strong>2026-08-28</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#f0fdf4] text-[#166534] border border-[#bbf7d0] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">COMMIT</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">04 - Contract / Mobilize</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">90%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">5 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 90%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">4.5 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">90% × 5 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$3.80M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $3.42M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000ATT12IAJ&#39;, &#39;AT&amp;T Inc.&#39;, 5, &#39;1 Week&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">CVS Health</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000CVS13IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">CVS Pharmacy Care Assist &amp; Insights</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">1 Week</span>
-              <span>Target Close: <strong>2026-08-27</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#f0fdf4] text-[#166534] border border-[#bbf7d0] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">COMMIT</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">04 - Contract / Mobilize</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">90%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">5 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 90%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">4.5 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">90% × 5 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$4.20M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $3.78M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000CVS13IAJ&#39;, &#39;CVS Health&#39;, 5, &#39;1 Week&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">América Móvil</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000AMX14IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">Claro Customer Care Bot</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">1 Week</span>
-              <span>Target Close: <strong>2026-08-28</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#f0fdf4] text-[#166534] border border-[#bbf7d0] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">COMMIT</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">04 - Contract / Mobilize</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">90%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">3 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 90%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">2.7 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">90% × 3 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$1.95M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $1.75M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000AMX14IAJ&#39;, &#39;América Móvil&#39;, 3, &#39;1 Week&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Macy's</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000Kh0ENIAZ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">Macy's - Agent Assist #EMEA</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">2 Weeks</span>
-              <span>Target Close: <strong>2026-09-04</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">PIPELINE</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">03 - Proposal/Negotiation</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">70%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">3 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 70%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">2.1 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">70% × 3 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$950.0K</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $665.0K</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000Kh0ENIAZ&#39;, &#39;Macy\&#39;s&#39;, 3, &#39;2 Weeks&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Macy's (Bloomingdale's)</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000NShxaIAD</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">BLOOMINGDALE's - Shopping Agent #EMEA</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">2 Weeks</span>
-              <span>Target Close: <strong>2026-09-02</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#fef3c7] text-[#92400e] border border-[#fde68a] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">UPSIDE</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">03 - Proposal/Negotiation</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">70%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">3 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 70%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">2.1 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">70% × 3 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$1.50M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $1.05M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000NShxaIAD&#39;, &#39;Macy\&#39;s (Bloomingdale\&#39;s)&#39;, 3, &#39;2 Weeks&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Deutsche Bank</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000DBK07IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">DB Wealth Management AI Advisor</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">2 Weeks</span>
-              <span>Target Close: <strong>2026-09-03</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">PIPELINE</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">02 - Tech Eval/Solution Dev</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">40%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">4 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 40%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">1.6 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">40% × 4 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$2.80M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $1.12M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000DBK07IAJ&#39;, &#39;Deutsche Bank&#39;, 4, &#39;2 Weeks&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Toyota Motor Corp</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">006Kf00000TOY15IAJ</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">Toyota Connected Car Voice Assistant</div>
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">2 Weeks</span>
-              <span>Target Close: <strong>2026-09-04</strong></span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div><span class="bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">PIPELINE</span></div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">02 - Tech Eval/Solution Dev</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">40%</span>
-              <span class="text-slate-400">•</span>
-              <span class="font-bold text-slate-700">4 FTEs</span>
-            </div>
-            <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 40%"></div>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">1.6 FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">40% × 4 FTEs</span>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">$2.50M</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: $1.00M</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal(&#39;006Kf00000TOY15IAJ&#39;, &#39;Toyota Motor Corp&#39;, 4, &#39;2 Weeks&#39;)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
-              <span>+ Pre-Staff</span>
-            </button>
-          </td>
-        </tr></tbody>
+              <tbody id="gtm-ledger-tbody" class="divide-y divide-slate-100 text-slate-700">
+              <tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">Loading authentic pipeline opportunities...</td></tr>
+            </tbody>
             </table>
           </div>
 
           <!-- Opportunities Pagination Controls -->
           <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
-            <div id="gtm-ledger-pagination-info">Showing 1 - 10 of 30 opportunities</div>
-            <div class="flex items-center gap-1.5" id="gtm-ledger-pagination-btns">
-          <button onclick="changeGtmLedgerPage(0)" disabled="" class="px-2.5 py-1 rounded bg-slate-100 text-slate-300 cursor-not-allowed">« Prev</button>
-          <span class="px-2 font-bold text-slate-700">Page 1 of 3</span>
-          <button onclick="changeGtmLedgerPage(2)" class="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition">Next »</button>
-        </div>
+            <div id="gtm-ledger-pagination-info">Showing opportunities...</div>
+            <div class="flex items-center gap-1.5" id="gtm-ledger-pagination-btns"></div>
           </div>
         </div>
 
@@ -5396,12 +4679,7 @@
       const regList = document.getElementById("gtm-regional-capture-list");
       if (regList) {
         regList.innerHTML = "";
-        const regData = gtm.regional_capture || [
-          { region: "UK & Ireland", counts: 142, services_amount: "$9.35M", total_acv: "$118.50M", pct: 55.0 },
-          { region: "Central Europe (DACH)", counts: 86, services_amount: "$6.10M", total_acv: "$54.20M", pct: 25.2 },
-          { region: "Southern Europe & MEA", counts: 58, services_amount: "$2.05M", total_acv: "$28.40M", pct: 13.2 },
-          { region: "Nordics & Benelux", counts: 34, services_amount: "$2.12M", total_acv: "$14.30M", pct: 6.6 }
-        ];
+        const regData = gtm.regional_capture || [];
 
         regData.forEach(r => {
           regList.innerHTML += `
@@ -5426,11 +4704,7 @@
       const healthList = document.getElementById("gtm-workload-health-list");
       if (healthList) {
         healthList.innerHTML = "";
-        const healthData = gtm.workload_health || [
-          { status: "Delivered", count: 3570, pct: 62.7, color: "bg-emerald-500" },
-          { status: "In-Flight", count: 1420, pct: 25.0, color: "bg-indigo-500" },
-          { status: "Missing Date", count: 700, pct: 12.3, color: "bg-amber-400" }
-        ];
+        const healthData = gtm.workload_health || [];
 
         healthData.forEach(h => {
           healthList.innerHTML += `
@@ -5451,12 +4725,7 @@
       const strategyList = document.getElementById("gtm-delivery-strategy-list");
       if (strategyList) {
         strategyList.innerHTML = "";
-        const strategyData = gtm.delivery_strategy || [
-          { led_by: "Customer", count: 1913, revenue: "$0", pct: 33.6, color: "bg-amber-500" },
-          { led_by: "Partner", count: 1908, revenue: "$0", pct: 33.5, color: "bg-emerald-500" },
-          { led_by: "Unknown", count: 1250, revenue: "$0", pct: 22.0, color: "bg-slate-400" },
-          { led_by: "PSO", count: 619, revenue: "$0", pct: 10.9, color: "bg-indigo-600" }
-        ];
+        const strategyData = gtm.delivery_strategy || [];
 
         strategyData.forEach(s => {
           strategyList.innerHTML += `
@@ -5955,7 +5224,7 @@
         'portfolio': 'Customer Portfolio',
         'timeline': 'Runway & Roll-off Timeline',
         'matrix': 'Capacity & Skill Matrix',
-        'gtm': 'GTM & Sales Pipeline'
+        'gtm': 'Sales Pipeline & Demand'
       }[currentTab] || 'General';
 
       const defaultTitle = customSubject || `[EMEA Dashboard] [${activeTabName}] Feedback / Issue`;
@@ -6091,7 +5360,7 @@
         'portfolio': 'Customer Portfolio',
         'timeline': 'Runway & Roll-off Timeline',
         'matrix': 'Capacity & Skill Matrix',
-        'gtm': 'GTM & Sales Pipeline'
+        'gtm': 'Sales Pipeline & Demand'
       }[currentTab] || 'General';
 
       const formattedDesc = `
@@ -6244,7 +5513,7 @@ Thank you!
           'portfolio': 'Customer Portfolio',
           'timeline': 'Runway & Roll-off Timeline',
           'matrix': 'Capacity & Skill Matrix',
-          'gtm': 'GTM & Sales Pipeline'
+          'gtm': 'Sales Pipeline & Demand'
         }[currentTab] || 'General';
 
         const res = await fetch("/api/agent/chat", {
@@ -6257,9 +5526,9 @@ Thank you!
         appendAgentBubble("agent", data.reply, data.actions);
       } catch (err) {
         removeAgentTyping(typingId);
-        appendAgentBubble("agent", "I analyzed our live BigQuery staffing and GTM dataset. How else can I help you navigate the portfolio?", [
+        appendAgentBubble("agent", "I analyzed our live BigQuery staffing and pipeline dataset. How else can I help you navigate the portfolio?", [
           { label: "👉 Open Executive Dashboard", tab: "exec" },
-          { label: "💼 Open GTM Pipeline", tab: "gtm" }
+          { label: "💼 Open Sales Pipeline", tab: "gtm" }
         ]);
       }
     }
@@ -6413,7 +5682,7 @@ Thank you!
           </h3>
           <p class="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Live BigQuery &amp; GTM Connected
+            Live BigQuery &amp; Pipeline Connected
           </p>
         </div>
       </div>
