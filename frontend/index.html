@@ -252,11 +252,13 @@
       position: relative;
       color: #aaa6c3 !important;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      padding: 0.65rem 1.15rem !important;
+      padding: 0.4rem 0.55rem !important;
+      font-size: 0.725rem !important;
       border-bottom: 2.5px solid transparent !important;
-      border-radius: 0.75rem 0.75rem 0 0 !important;
-      font-weight: 500;
+      border-radius: 0.5rem 0.5rem 0 0 !important;
+      font-weight: 600;
       background-color: transparent !important;
+      white-space: nowrap !important;
     }
     .nav-tab svg {
       color: #7b7899;
@@ -285,16 +287,32 @@
       background-color: #151030 !important;
       color: #c4b5fd !important;
       border: 1px solid rgba(145, 94, 255, 0.35) !important;
+      font-size: 10px !important;
+      padding: 0.1rem 0.4rem !important;
     }
     .nav-tab #nav-portfolio-count {
       background-color: #0c2324 !important;
       color: #00cea8 !important;
       border: 1px solid rgba(0, 206, 168, 0.35) !important;
+      font-size: 10px !important;
+      padding: 0.1rem 0.4rem !important;
     }
     .nav-tab #nav-gtm-count {
       background-color: #2e1d08 !important;
       color: #fbbf24 !important;
       border: 1px solid rgba(251, 191, 36, 0.35) !important;
+      font-size: 10px !important;
+      padding: 0.1rem 0.4rem !important;
+    }
+    /* Hide scrollbars for navbar and clean components */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none !important;
+      scrollbar-width: none !important;
     }
     input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
@@ -405,37 +423,37 @@
       </div>
 
       <!-- Modern Navigation Tabs with 3D Portfolio Indicator -->
-      <div class="border-t border-[#1f1b40] flex items-center gap-2 text-xs pt-1.5 overflow-x-auto no-scrollbar relative z-10">
-        <button onclick="switchTab('exec')" id="tab-btn-exec" class="nav-tab px-3.5 py-2 font-bold transition flex items-center gap-2 whitespace-nowrap shrink-0 active cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+      <div class="border-t border-[#1f1b40] flex items-center gap-1 sm:gap-1.5 xl:gap-2 text-xs pt-1.5 overflow-x-auto no-scrollbar relative z-10">
+        <button onclick="switchTab('exec')" id="tab-btn-exec" class="nav-tab px-2.5 py-1.5 font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 active cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
           <span>Executive Dashboard</span>
         </button>
-        <button onclick="switchTab('board')" id="tab-btn-board" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+        <button onclick="switchTab('board')" id="tab-btn-board" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
           <span>Staffing Board</span>
         </button>
-        <button onclick="resetRosterFiltersAndShowAll()" id="tab-btn-roster" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+        <button onclick="resetRosterFiltersAndShowAll()" id="tab-btn-roster" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
           <span>Staffing Roster</span>
-          <span id="nav-roster-count" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full">106</span>
+          <span id="nav-roster-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">1.3k</span>
         </button>
-        <button onclick="switchTab('portfolio')" id="tab-btn-portfolio" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+        <button onclick="switchTab('portfolio')" id="tab-btn-portfolio" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
           <span>Customer Portfolio</span>
-          <span id="nav-portfolio-count" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full">56</span>
+          <span id="nav-portfolio-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">56</span>
         </button>
-        <button onclick="switchTab('timeline')" id="tab-btn-timeline" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <button onclick="switchTab('timeline')" id="tab-btn-timeline" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           <span>Runway &amp; Roll-off</span>
         </button>
-        <button onclick="switchTab('matrix')" id="tab-btn-matrix" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-          <span>Capacity &amp; Skill Matrix</span>
+        <button onclick="switchTab('matrix')" id="tab-btn-matrix" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          <span>Capacity &amp; Skills</span>
         </button>
-        <button onclick="switchTab('gtm')" id="tab-btn-gtm" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          <span>Sales Pipeline &amp; Demand</span>
-          <span id="nav-gtm-count" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full">120</span>
+        <button onclick="switchTab('gtm')" id="tab-btn-gtm" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span>Pipeline &amp; Demand</span>
+          <span id="nav-gtm-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">5k</span>
         </button>
       </div>
     </div>
@@ -2987,8 +3005,8 @@
         document.getElementById("nav-portfolio-count").textContent = totalCustCount;
       }
       if (document.getElementById("nav-gtm-count")) {
-        const gtmTotal = (globalData.gtm?.workloads || []).length || (globalData.gtm?.summary?.total_workloads) || 120;
-        document.getElementById("nav-gtm-count").textContent = gtmTotal;
+        const gtmTotal = (globalData.gtm?.workloads || []).length || (globalData.gtm?.summary?.total_workloads) || 0;
+        document.getElementById("nav-gtm-count").textContent = gtmTotal >= 1000 ? `${(gtmTotal / 1000).toFixed(1).replace('.0', '')}k` : gtmTotal;
       }
       if (document.getElementById("portfolio-total-accounts-count")) {
         document.getElementById("portfolio-total-accounts-count").textContent = totalCustCount;
@@ -3580,7 +3598,7 @@
         const allocCountEl = document.getElementById("roster-alloc-count");
         if (allocCountEl) allocCountEl.textContent = count;
         const navRosterCountEl = document.getElementById("nav-roster-count");
-        if (navRosterCountEl) navRosterCountEl.textContent = count;
+        if (navRosterCountEl) navRosterCountEl.textContent = count >= 1000 ? `${(count / 1000).toFixed(1).replace('.0', '')}k` : count;
         const peopleCountEl = document.getElementById("roster-people-count");
         if (peopleCountEl) peopleCountEl.textContent = uniquePeople.size;
       } catch (err) {
@@ -5224,7 +5242,7 @@
         'portfolio': 'Customer Portfolio',
         'timeline': 'Runway & Roll-off Timeline',
         'matrix': 'Capacity & Skill Matrix',
-        'gtm': 'Sales Pipeline & Demand'
+        'gtm': 'Pipeline & Demand'
       }[currentTab] || 'General';
 
       const defaultTitle = customSubject || `[EMEA Dashboard] [${activeTabName}] Feedback / Issue`;
@@ -5360,7 +5378,7 @@
         'portfolio': 'Customer Portfolio',
         'timeline': 'Runway & Roll-off Timeline',
         'matrix': 'Capacity & Skill Matrix',
-        'gtm': 'Sales Pipeline & Demand'
+        'gtm': 'Pipeline & Demand'
       }[currentTab] || 'General';
 
       const formattedDesc = `
@@ -5513,7 +5531,7 @@ Thank you!
           'portfolio': 'Customer Portfolio',
           'timeline': 'Runway & Roll-off Timeline',
           'matrix': 'Capacity & Skill Matrix',
-          'gtm': 'Sales Pipeline & Demand'
+          'gtm': 'Pipeline & Demand'
         }[currentTab] || 'General';
 
         const res = await fetch("/api/agent/chat", {
@@ -5528,7 +5546,7 @@ Thank you!
         removeAgentTyping(typingId);
         appendAgentBubble("agent", "I analyzed our live BigQuery staffing and pipeline dataset. How else can I help you navigate the portfolio?", [
           { label: "👉 Open Executive Dashboard", tab: "exec" },
-          { label: "💼 Open Sales Pipeline", tab: "gtm" }
+          { label: "💼 Open Pipeline & Demand", tab: "gtm" }
         ]);
       }
     }
