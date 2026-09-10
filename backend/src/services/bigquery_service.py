@@ -109,13 +109,14 @@ def query_emea_delivery_data(
       SELECT 
         ws.resource_id,
         ws.project_id,
+        COALESCE(NULLIF(ws.assignment_id, ''), ws.project_id) AS assignment_id,
         MAX(ws.schedule_week_ending) AS week_ending,
         ROUND(AVG(ws.scheduled_timecard_hours), 1) AS scheduled_timecard_hours
       FROM `concord-prod.service_cloudbi.weekly_schedules` ws
       WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.weekly_schedules`)
         AND ws.schedule_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
         AND ws.scheduled_timecard_hours > 0
-      GROUP BY ws.resource_id, ws.project_id
+      GROUP BY ws.resource_id, ws.project_id, assignment_id
     ),
     target_projects AS (
       SELECT 
@@ -143,8 +144,12 @@ def query_emea_delivery_data(
       r.scheduled_timecard_hours,
       COALESCE(a.week_ending, r.week_ending) AS week_ending,
       a.project_id,
+      a.assignment_id,
       COALESCE(p.account_name, 'Strategic Partner') AS account_name,
-      COALESCE(p.project_name, 'Cloud Transformation') AS project_name,
+      IF(a.assignment_id IS NOT NULL AND a.assignment_id != '' AND a.assignment_id != a.project_id,
+         CONCAT(COALESCE(p.project_name, 'Cloud Transformation'), ' (', a.assignment_id, ')'),
+         COALESCE(p.project_name, 'Cloud Transformation')
+      ) AS project_name,
       COALESCE(p.engagement_manager_name, 'PSO Lead') AS engagement_manager_name,
       COALESCE(p.project_start_date, @start_date) AS project_start_date,
       COALESCE(p.project_end_date, @end_date) AS project_end_date,
