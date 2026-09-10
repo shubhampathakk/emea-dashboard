@@ -1112,10 +1112,10 @@
                 <th class="p-3.5 font-semibold">Language</th>
                 <th class="p-3.5 font-semibold w-1/4">Account / Project</th>
                 <th class="p-3.5 font-semibold w-1/5">Skill / Practice</th>
-                <th class="p-3.5 font-semibold">Dates (Start - End)</th>
-                <th class="p-3.5 font-semibold">Allocation %</th>
-                <th class="p-3.5 font-semibold">Runway</th>
-                <th class="p-3.5 font-semibold">Risk Status</th>
+                <th class="p-3.5 font-semibold whitespace-nowrap">Dates (Start &rarr; End)</th>
+                <th class="p-3.5 font-semibold whitespace-nowrap">Allocation %</th>
+                <th class="p-3.5 font-semibold whitespace-nowrap">Runway</th>
+                <th class="p-3.5 font-semibold whitespace-nowrap">Risk Status</th>
               </tr>
             </thead>
             <tbody id="master-roster-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
@@ -3218,6 +3218,27 @@
     }
     window.sanitizeLdap = sanitizeLdap;
 
+    function formatRosterDate(dateStr) {
+      if (!dateStr || dateStr === '-' || String(dateStr).startsWith('1969-') || String(dateStr).startsWith('1970-')) return '-';
+      try {
+        const parts = String(dateStr).slice(0, 10).split('-');
+        if (parts.length === 3) {
+          const y = parts[0];
+          const mIdx = parseInt(parts[1], 10) - 1;
+          const d = parts[2];
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          if (mIdx >= 0 && mIdx < 12) {
+            return `${d} ${months[mIdx]} ${y}`;
+          }
+        }
+        return dateStr;
+      } catch (e) {
+        return dateStr;
+      }
+    }
+    window.formatRosterDate = formatRosterDate;
+
+
     function initDateFilter() {
       const today = new Date();
       const ninetyDaysAgo = new Date();
@@ -4262,7 +4283,9 @@
 
             let runwayDisplay = `<span class="text-slate-400 font-mono text-xs">-</span>`;
             if (a.end && !isPersonBench) {
-              if (runwayDays >= 0 && runwayDays <= 7) {
+              if (runwayDays < 0) {
+                runwayDisplay = `<span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold px-1.5 py-0.5 rounded-md shadow-2xs" title="Contract end date passed (${Math.abs(runwayDays)}d ago)">Expired</span>`;
+              } else if (runwayDays >= 0 && runwayDays <= 7) {
                 runwayDisplay = `<span class="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-2xs">${runwayDays}d</span>`;
               } else if (runwayDays > 7 && runwayDays <= 21) {
                 runwayDisplay = `<span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-2xs">${runwayDays}d</span>`;
@@ -4274,9 +4297,13 @@
             let dateDisplay = `<span class="text-slate-400 font-normal">-</span>`;
             if (!isPersonBench) {
               if (a.start && a.end) {
-                dateDisplay = `<span class="text-xs text-slate-700">${a.start} &bull; ${a.end}</span>`;
+                const isOverdue = runwayDays < 0;
+                dateDisplay = `<div class="whitespace-nowrap flex flex-col gap-0.5 text-xs">
+                  <span class="font-medium text-slate-700">${formatRosterDate(a.start)} &rarr; <strong class="${isOverdue ? 'text-amber-700' : 'text-slate-900'} font-semibold">${formatRosterDate(a.end)}</strong></span>
+                  ${isOverdue ? '<span class="text-[9px] text-amber-600 font-bold tracking-tight inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Expired / Extension Pending</span>' : ''}
+                </div>`;
               } else if (a.start) {
-                dateDisplay = `<span class="text-xs text-slate-700">${a.start}</span>`;
+                dateDisplay = `<span class="whitespace-nowrap text-xs text-slate-700 font-medium">${formatRosterDate(a.start)}</span>`;
               }
             }
 
@@ -4319,10 +4346,10 @@
               <td class="p-3.5 text-slate-500 text-xs">${rLangs}</td>
               <td class="p-3.5">${projCell}</td>
               <td class="p-3.5 text-[11px] text-slate-500 leading-tight">${skillsStr}</td>
-              <td class="p-3.5">${dateDisplay}</td>
-              <td class="p-3.5">${allocCell}</td>
-              <td class="p-3.5">${runwayDisplay}</td>
-              <td class="p-3.5">${statusBadge}</td>
+              <td class="p-3.5 whitespace-nowrap">${dateDisplay}</td>
+              <td class="p-3.5 whitespace-nowrap">${allocCell}</td>
+              <td class="p-3.5 whitespace-nowrap">${runwayDisplay}</td>
+              <td class="p-3.5 whitespace-nowrap">${statusBadge}</td>
             `;
             tbody.appendChild(tr);
           });
@@ -4732,7 +4759,7 @@
                   <div>
                     <div class="font-bold text-xs text-slate-900">${a.project}</div>
                     <div class="text-[11px] text-slate-500 mt-0.5">
-                      Proposal Timeline: <strong class="text-slate-700">${a.start || 'Active'} &bull; ${a.end || 'Open'}</strong>
+                      Proposal Timeline: <strong class="text-slate-700">${(a.start ? formatRosterDate(a.start) : 'Active')} &rarr; ${(a.end ? formatRosterDate(a.end) : 'Open')}</strong>
                     </div>
                   </div>
                 </div>
