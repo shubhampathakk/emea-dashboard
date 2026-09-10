@@ -116,14 +116,41 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         
         if hub_key not in customer_map[acc_name]:
             customer_map[acc_name][hub_key] = []
-        if not any(p["name"] == res_name for p in customer_map[acc_name][hub_key]):
+        
+        existing_p = next((p for p in customer_map[acc_name][hub_key] if p["name"] == res_name), None)
+        if existing_p:
+            existing_p["hours"] = round(existing_p.get("hours", 0.0) + hrs, 1)
+            # 40 hrs per week standard = 100%
+            existing_p["allocation_pct"] = min(100, max(0, round((existing_p["hours"] / 40.0) * 100)))
+        else:
+            p_pct = min(100, max(0, round((hrs / 40.0) * 100))) if hrs > 0 else 0
             customer_map[acc_name][hub_key].append({
                 "name": res_name,
                 "ldap": ldap,
                 "role": role,
-                "hours": hrs
+                "hours": round(hrs, 1),
+                "allocation_pct": p_pct
             })
-            customer_map[acc_name]["total_hours"] += min(40.0, hrs)
+        customer_map[acc_name]["total_hours"] = round(customer_map[acc_name]["total_hours"] + hrs, 1)
+
+    for c in customer_map.values():
+        c["total_hours"] = round(c["total_hours"], 1)
+        for hub_k in ["EMEA", "GSD"]:
+            for p in c.get(hub_k, []):
+                if p.get("allocation_pct") is None or p.get("allocation_pct") == 0:
+                    pHrs = p.get("hours", 0.0)
+                    if pHrs > 0:
+                        p["allocation_pct"] = min(100, round((pHrs / 40.0) * 100))
+                    elif p["name"] in resource_map:
+                        r_match = resource_map[p["name"]]
+                        acc_ass = [a for a in r_match.get("assignments", []) if a.get("account") == c["account_name"]]
+                        if acc_ass:
+                            sum_hrs = sum(a.get("weekly_hours", 0.0) for a in acc_ass)
+                            p["hours"] = round(sum_hrs, 1)
+                            p["allocation_pct"] = min(100, round((sum_hrs / 40.0) * 100))
+                        elif r_match.get("weekly_hours", 0.0) > 0:
+                            p["allocation_pct"] = min(100, round((r_match["weekly_hours"] / 40.0) * 100))
+
 
     resources_list = list(resource_map.values())
     total_cap = 0.0

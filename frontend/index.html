@@ -2985,7 +2985,9 @@
   <!-- Main JavaScript App Logic -->
   <script>
     let globalData = { resources: [], customerPortfolio: [], sheets: [] };
-    let currentTab = "exec";
+    const VALID_TABS = ["exec", "board", "roster", "portfolio", "timeline", "matrix", "gtm"];
+    const initialHash = (window.location.hash || "").replace("#", "").toLowerCase();
+    let currentTab = VALID_TABS.includes(initialHash) ? initialHash : "exec";
     let portfolioSort = "resources";
     let timelineFilter = "all";
 
@@ -3140,13 +3142,22 @@
       requestAnimationFrame(update);
     }
 
-    function switchTab(tabId) {
+    function switchTab(tabId, pushHistory = true) {
+      if (!tabId || !VALID_TABS.includes(tabId)) return;
       currentTab = tabId;
+
+      // Update URL hash and history state for native browser back/forward navigation
+      if (pushHistory) {
+        if (window.location.hash !== `#${tabId}`) {
+          window.history.pushState({ tab: tabId }, "", `#${tabId}`);
+        }
+      }
+
       document.querySelectorAll(".nav-tab").forEach(btn => btn.classList.remove("active"));
       const activeBtn = document.getElementById(`tab-btn-${tabId}`);
       if (activeBtn) activeBtn.classList.add("active");
 
-      ["exec", "board", "roster", "portfolio", "timeline", "matrix", "gtm"].forEach(id => {
+      VALID_TABS.forEach(id => {
         const view = document.getElementById(`view-${id}`);
         if (view) {
           if (id === tabId) {
@@ -3176,6 +3187,27 @@
       if (tabId === "matrix") renderSkillMatrix();
       if (tabId === "gtm") renderGtmView();
     }
+
+    // Handle browser back and forward button navigation
+    window.addEventListener("popstate", (e) => {
+      let targetTab = e.state && e.state.tab ? e.state.tab : null;
+      if (!targetTab) {
+        const h = (window.location.hash || "").replace("#", "").toLowerCase();
+        if (VALID_TABS.includes(h)) targetTab = h;
+      }
+      if (!targetTab) targetTab = "exec";
+      if (VALID_TABS.includes(targetTab) && targetTab !== currentTab) {
+        switchTab(targetTab, false);
+      }
+    });
+
+    window.addEventListener("hashchange", () => {
+      const h = (window.location.hash || "").replace("#", "").toLowerCase();
+      if (VALID_TABS.includes(h) && h !== currentTab) {
+        switchTab(h, false);
+      }
+    });
+
 
 
     function sanitizeLdap(ldap, email, fallback = '') {
@@ -3333,9 +3365,12 @@
         renderPortfolioCards();
         renderTimelineCards();
         renderSkillMatrix();
-        renderGtmView();
-        switchTab(currentTab);
-        updateDateRangeBadge();
+        if (!window.location.hash) {
+          window.history.replaceState({ tab: currentTab }, "", `#${currentTab}`);
+        } else {
+          window.history.replaceState({ tab: currentTab }, "", window.location.hash);
+        }
+        switchTab(currentTab, false);
         if (typeof triggerDashboardEntranceGSAP === 'function') triggerDashboardEntranceGSAP();
       } catch (err) {
         console.error("Failed to load data", err);
@@ -4366,7 +4401,31 @@
         let peoplePills = "";
         ["GSD", "EMEA"].forEach(reg => {
           (c[reg] || []).forEach(p => {
-            peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition">${p.name} <span class="text-[10px] text-indigo-600 font-bold">(${p.allocation_pct || 100}%)</span></span>`;
+            let pct = p.allocation_pct;
+            if (pct === undefined || pct === null) {
+              if (p.hours !== undefined && p.hours !== null && p.hours > 0) {
+                pct = Math.min(100, Math.round((p.hours / 40.0) * 100));
+              } else {
+                const res = (globalData.resources || []).find(r => r.name === p.name || (p.ldap && r.ldap === p.ldap));
+                if (res) {
+                  const accAss = (res.assignments || []).filter(a => 
+                    (a.account || "").toLowerCase() === (c.account_name || "").toLowerCase() || 
+                    (a.project || "").toLowerCase().includes((c.account_name || "").toLowerCase())
+                  );
+                  if (accAss.length > 0) {
+                    const custHrs = accAss.reduce((sum, a) => sum + (parseFloat(a.weekly_hours) || 0), 0);
+                    pct = Math.min(100, Math.round((custHrs / 40.0) * 100));
+                  } else if (res.weekly_hours > 0) {
+                    pct = Math.min(100, Math.round((res.weekly_hours / 40.0) * 100));
+                  }
+                }
+              }
+            }
+            if (pct === undefined || pct === null || isNaN(pct)) {
+              pct = 100;
+            }
+            pct = Math.max(0, Math.min(100, Math.round(pct)));
+            peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition">${p.name} <span class="text-[10px] text-indigo-600 font-bold">(${pct}%)</span></span>`;
           });
         });
 
@@ -4387,6 +4446,10 @@
         // Region summary counts
         let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${totalPeople} EMEA Delivery</span>`;
 
+        const formattedHours = typeof c.total_hours === 'number'
+          ? (Math.round(c.total_hours * 10) / 10)
+          : (parseFloat(c.total_hours) ? Math.round(parseFloat(c.total_hours) * 10) / 10 : (totalPeople * 40));
+
         card.innerHTML = `
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-150 pb-3">
             <div class="flex items-center gap-3">
@@ -4395,7 +4458,7 @@
               </div>
               <div>
                 <div class="font-title font-bold text-sm text-slate-900">${c.account_name}</div>
-                <div class="text-xs text-indigo-600 font-semibold mt-0.5">${totalPeople} Resources &bull; <span class="font-bold text-slate-700">${c.total_hours || (totalPeople * 40)} hrs/wk</span></div>
+                <div class="text-xs text-indigo-600 font-semibold mt-0.5">${totalPeople} Resources &bull; <span class="font-bold text-slate-700">${formattedHours} hrs/wk</span></div>
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
