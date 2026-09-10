@@ -17,6 +17,7 @@ from src.services.bigquery_service import (
     fetch_projects_by_ldap,
     fetch_accounts_by_ldap
 )
+from src.services.manager_directory import get_manager_name
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -51,6 +52,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         ldap = extract_ldap(row.get("ldap") or row.get("email"), fallback=res_name)
         mgr_raw = row.get("manager_ldap") or ""
         mgr_ldap = mgr_raw.split("@")[0].strip() if mgr_raw else ""
+        mgr_name = row.get("manager_name") or get_manager_name(mgr_ldap)
         role = row.get("role") or "Consultant"
         practice = row.get("practice") or "Cloud Delivery"
         is_ooo = str(row.get("is_ooo") or "").lower() == "true"
@@ -82,6 +84,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "name": res_name,
                 "ldap": ldap,
                 "manager_ldap": mgr_ldap,
+                "manager_name": mgr_name,
                 "role": role,
                 "cost_center": cc,
                 "cost_center_name": row.get("cost_center_name") or "",
@@ -96,6 +99,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             }
         elif mgr_ldap and not resource_map[res_name].get("manager_ldap"):
             resource_map[res_name]["manager_ldap"] = mgr_ldap
+            resource_map[res_name]["manager_name"] = mgr_name
 
         if row.get("project_id") or hrs > 0:
             resource_map[res_name]["assignments"].append({

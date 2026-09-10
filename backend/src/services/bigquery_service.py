@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from fastapi import Header, HTTPException, Request
 from google.cloud import bigquery
 from google.oauth2.credentials import Credentials
+from src.services.manager_directory import get_manager_name
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,9 @@ def query_emea_delivery_data(
     for row in results:
         d = dict(row)
         d["ldap"] = extract_ldap(d.get("ldap"), fallback=d.get("resource_name", ""))
+        mgr_ldap = d.get("manager_ldap")
+        if mgr_ldap:
+            d["manager_name"] = get_manager_name(mgr_ldap)
         rows.append(d)
     return rows
 

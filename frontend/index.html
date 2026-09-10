@@ -3130,26 +3130,99 @@
       selectRollOffBucket(currentRollOffBucket || 'curr');
     }
 
+    const MANAGER_NAMES_MAP = {
+      "ngada": "Ada Tagoe (Ng)",
+      "akolkiewicz": "Agnieszka Kołkiewicz",
+      "mcwilliam": "Alex McWilliam",
+      "alveirogarcia": "Alveiro Garcia Niño",
+      "amysouthwood": "Amy Southwood",
+      "ageracitano": "Angelo Geracitano",
+      "anibhaa": "Anibha Athalye",
+      "ashishagar": "Ashish Agarwal",
+      "carlogiovine": "Carlo Giovine",
+      "dandreoli": "Dario Andreoli",
+      "davidesteras": "David Esteras",
+      "diegocat": "Diego Catania",
+      "elikaplan": "Eli Kaplan",
+      "fdiehl": "Falk Diehl",
+      "fyn": "Fayan Pourisa",
+      "finntoner": "Finn Toner",
+      "flordi": "Floriana Di Pinto",
+      "rinaudo": "Francesco Rinaudo",
+      "gauravtaneja": "Gaurav Taneja",
+      "halcohen": "Hal Cohen",
+      "hugoalves": "Hugo Alves",
+      "jtmartin": "Juan Turrión",
+      "sincero": "Julio Sincero",
+      "kzw": "Krzysztof Zawierucha",
+      "kusaurabh": "Kumar Saurabh",
+      "lcaggioni": "Lorenzo Caggioni",
+      "ltomat": "Luca Tomat",
+      "lfloretta": "Lucio Floretta",
+      "msolares": "Mario Solares",
+      "herterich": "Matthias M. Herterich",
+      "ziener": "Matthias Ziener",
+      "pawelglica": "Paweł Glica",
+      "ptokarski": "Paweł Tokarski",
+      "rmichalski": "Rafał Michalski",
+      "ramanmadan": "Raman Madan",
+      "nezharand": "Rand Nezha",
+      "richardpaget": "Richard Paget",
+      "seanhiggins": "Sean Higgins",
+      "shruthireddyp": "Shruthi Reddy Paturi",
+      "sofiadanko": "Sofia Danko",
+      "sfreiberger": "Stefan Freiberger",
+      "suchitpuri": "Suchit Puri",
+      "sveneddicks": "Sven Eddicks",
+      "vasugupta": "Vasu Gupta",
+      "inigosoto": "Iñigo Soto",
+      "tpanhard": "Thibault Panhard",
+      "bastienp": "Bastien Prot",
+      "apease": "Andrew Pease",
+      "guptaashutosh": "Ashutosh Gupta",
+      "thomascliett": "Thomas Cliett",
+      "lynb": "Lyn Brady",
+      "dorotheea": "Dorothee Andermann",
+      "cuadrado": "Alberto Cuadrado",
+      "francescobotta": "Francesco Botta",
+      "sangwikar": "Sagar Sangwikar",
+      "schuetzl": "Linus Schuetz",
+      "rmizrahi": "Raphael Mizrahi",
+      "emolvera": "Emmanuel Olvera"
+    };
+
+    function getManagerDisplayName(ldap, fallbackName) {
+      if (fallbackName && fallbackName !== ldap) return fallbackName;
+      if (!ldap) return "";
+      const clean = ldap.toLowerCase().replace(/^@/, "").split("@")[0].trim();
+      return MANAGER_NAMES_MAP[clean] || (fallbackName || clean.charAt(0).toUpperCase() + clean.slice(1));
+    }
+    window.getManagerDisplayName = getManagerDisplayName;
+
     function populateManagerFilter() {
       const select = document.getElementById("roster-filter-manager");
       if (!select) return;
-      const currentVal = select.value || "ALL";
+      const currentVal = (select.value || "ALL").trim().toLowerCase();
       const resources = (globalData && globalData.resources) || [];
-      const managerSet = new Set();
+      const managerMap = new Map(); // ldap -> displayName
       resources.forEach(r => {
         if (r && r.manager_ldap) {
-          const m = r.manager_ldap.trim();
-          if (m) managerSet.add(m);
+          const m = r.manager_ldap.trim().toLowerCase();
+          if (m) {
+            const displayName = getManagerDisplayName(m, r.manager_name);
+            managerMap.set(m, displayName);
+          }
         }
       });
-      const sortedManagers = Array.from(managerSet).sort((a, b) => a.localeCompare(b));
+      // Sort managers alphabetically by their actual full name
+      const sortedManagers = Array.from(managerMap.entries()).sort((a, b) => a[1].localeCompare(b[1]));
       
       select.innerHTML = `<option value="ALL">All Managers (${sortedManagers.length})</option>`;
-      sortedManagers.forEach(mgr => {
+      sortedManagers.forEach(([ldap, name]) => {
         const opt = document.createElement("option");
-        opt.value = mgr;
-        opt.textContent = `@${mgr}`;
-        if (mgr.toLowerCase() === currentVal.toLowerCase()) opt.selected = true;
+        opt.value = ldap;
+        opt.textContent = name;
+        if (ldap === currentVal) opt.selected = true;
         select.appendChild(opt);
       });
     }
@@ -3452,7 +3525,11 @@
 
         resources.forEach(r => {
           if (!r) return;
-          if (mgrF !== "ALL" && (r.manager_ldap || "").toLowerCase() !== mgrF.toLowerCase()) return;
+          if (mgrF !== "ALL") {
+            const rMgrLdap = (r.manager_ldap || "").toLowerCase().trim();
+            const rMgrName = (r.manager_name || getManagerDisplayName(rMgrLdap)).toLowerCase().trim();
+            if (rMgrLdap !== mgrF.toLowerCase() && rMgrName !== mgrF.toLowerCase()) return;
+          }
           if (regF !== "ALL") {
             const rReg = (r.region || "").toUpperCase();
             const rHub = (r.hub || "").toUpperCase();
@@ -3539,9 +3616,11 @@
             const projName = isPersonBench ? "Bench / Available" : (a.project || "Bench / Available");
             const skillsStr = r.skills || r.practice || "General Practice";
 
+            const mgrDisplayName = getManagerDisplayName(r.manager_ldap, r.manager_name);
             const matchQ = !q ||
               rName.toLowerCase().includes(q) ||
               rLdap.toLowerCase().includes(q) ||
+              mgrDisplayName.toLowerCase().includes(q) ||
               (r.manager_ldap && r.manager_ldap.toLowerCase().includes(q)) ||
               projName.toLowerCase().includes(q) ||
               skillsStr.toLowerCase().includes(q);
@@ -3641,7 +3720,7 @@
                     <div class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">${rName}</div>
                     <div class="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
                       <span>@${rLdap}</span>
-                      ${r.manager_ldap ? `<span class="text-slate-300">•</span><span class="text-indigo-600 font-semibold bg-indigo-50/70 border border-indigo-150 px-1.5 py-0.2 rounded text-[9px] inline-flex items-center gap-0.5" title="Direct Manager">👤 @${r.manager_ldap}</span>` : ''}
+                      ${r.manager_ldap ? `<span class="text-slate-300">•</span><span class="text-indigo-600 font-semibold bg-indigo-50/70 border border-indigo-150 px-1.5 py-0.2 rounded text-[9px] inline-flex items-center gap-0.5" title="Direct Manager: @${r.manager_ldap}">👤 ${mgrDisplayName}</span>` : ''}
                     </div>
                     ${multiProjIndicator}
                   </div>
