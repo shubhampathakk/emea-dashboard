@@ -82,6 +82,7 @@ def query_emea_delivery_data(
         resource_id,
         ANY_VALUE(full_name) AS resource_name,
         ANY_VALUE(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) AS ldap,
+        ANY_VALUE(COALESCE(SPLIT(manager_ldap, '@')[OFFSET(0)], manager_ldap)) AS manager_ldap,
         ANY_VALUE(role) AS role,
         ANY_VALUE(cost_center) AS cost_center,
         ANY_VALUE(cost_center_name) AS cost_center_name,
@@ -134,6 +135,7 @@ def query_emea_delivery_data(
       r.resource_id,
       r.resource_name,
       COALESCE(r.ldap, SPLIT(r.resource_name, ' ')[OFFSET(0)]) AS ldap,
+      r.manager_ldap,
       r.role,
       r.cost_center,
       r.cost_center_name,
@@ -145,12 +147,15 @@ def query_emea_delivery_data(
       COALESCE(a.week_ending, r.week_ending) AS week_ending,
       a.project_id,
       a.assignment_id,
-      COALESCE(p.account_name, 'Strategic Partner') AS account_name,
-      IF(a.assignment_id IS NOT NULL AND a.assignment_id != '' AND a.assignment_id != a.project_id,
-         CONCAT(COALESCE(p.project_name, 'Cloud Transformation'), ' (', a.assignment_id, ')'),
-         COALESCE(p.project_name, 'Cloud Transformation')
+      p.account_name AS account_name,
+      IF(a.project_id IS NOT NULL,
+         IF(a.assignment_id IS NOT NULL AND a.assignment_id != '' AND a.assignment_id != a.project_id,
+            CONCAT(COALESCE(p.project_name, 'Cloud Transformation'), ' (', a.assignment_id, ')'),
+            COALESCE(p.project_name, 'Cloud Transformation')
+         ),
+         NULL
       ) AS project_name,
-      COALESCE(p.engagement_manager_name, 'PSO Lead') AS engagement_manager_name,
+      IF(a.project_id IS NOT NULL, COALESCE(p.engagement_manager_name, 'PSO Lead'), NULL) AS engagement_manager_name,
       COALESCE(p.project_start_date, @start_date) AS project_start_date,
       COALESCE(p.project_end_date, @end_date) AS project_end_date,
       COALESCE(a.scheduled_timecard_hours, r.scheduled_timecard_hours) AS proj_scheduled_hours

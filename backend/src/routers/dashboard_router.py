@@ -49,12 +49,14 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         res_name = row.get("resource_name") or "Unknown Engineer"
         res_id = row.get("resource_id") or res_name
         ldap = extract_ldap(row.get("ldap") or row.get("email"), fallback=res_name)
+        mgr_raw = row.get("manager_ldap") or ""
+        mgr_ldap = mgr_raw.split("@")[0].strip() if mgr_raw else ""
         role = row.get("role") or "Consultant"
         practice = row.get("practice") or "Cloud Delivery"
         is_ooo = str(row.get("is_ooo") or "").lower() == "true"
         
         proj_name = row.get("project_name") or "Delivery Project"
-        acc_name = row.get("account_name") or "Strategic Client"
+        acc_name = (row.get("account_name") or "").strip()
         pm_name = row.get("engagement_manager_name") or "Delivery Lead"
         
         try:
@@ -79,6 +81,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "id": res_id,
                 "name": res_name,
                 "ldap": ldap,
+                "manager_ldap": mgr_ldap,
                 "role": role,
                 "cost_center": cc,
                 "cost_center_name": row.get("cost_center_name") or "",
@@ -91,11 +94,13 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "weekly_hours": float(row.get("scheduled_timecard_hours") or 0),
                 "assignments": []
             }
+        elif mgr_ldap and not resource_map[res_name].get("manager_ldap"):
+            resource_map[res_name]["manager_ldap"] = mgr_ldap
 
         if row.get("project_id") or hrs > 0:
             resource_map[res_name]["assignments"].append({
                 "project": proj_name,
-                "account": acc_name,
+                "account": acc_name or "Client Delivery",
                 "weekly_hours": hrs,
                 "hours": hrs / 5.0,
                 "start": start_date,
@@ -105,34 +110,35 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "type": "delivery"
             })
 
-        if acc_name not in customer_map:
-            customer_map[acc_name] = {
-                "account_name": acc_name,
-                "program_manager": pm_name,
-                "delivery_executive": "Delivery Executive",
-                "total_hours": 0.0,
-                "EMEA": [],
-                "GSD": []
-            }
-        
-        if hub_key not in customer_map[acc_name]:
-            customer_map[acc_name][hub_key] = []
-        
-        existing_p = next((p for p in customer_map[acc_name][hub_key] if p["name"] == res_name), None)
-        if existing_p:
-            existing_p["hours"] = round(existing_p.get("hours", 0.0) + hrs, 1)
-            # 40 hrs per week standard = 100%
-            existing_p["allocation_pct"] = min(100, max(0, round((existing_p["hours"] / 40.0) * 100)))
-        else:
-            p_pct = min(100, max(0, round((hrs / 40.0) * 100))) if hrs > 0 else 0
-            customer_map[acc_name][hub_key].append({
-                "name": res_name,
-                "ldap": ldap,
-                "role": role,
-                "hours": round(hrs, 1),
-                "allocation_pct": p_pct
-            })
-        customer_map[acc_name]["total_hours"] = round(customer_map[acc_name]["total_hours"] + hrs, 1)
+        if (row.get("project_id") or hrs > 0) and acc_name and acc_name != "Strategic Partner":
+            if acc_name not in customer_map:
+                customer_map[acc_name] = {
+                    "account_name": acc_name,
+                    "program_manager": pm_name,
+                    "delivery_executive": "Delivery Executive",
+                    "total_hours": 0.0,
+                    "EMEA": [],
+                    "GSD": []
+                }
+            
+            if hub_key not in customer_map[acc_name]:
+                customer_map[acc_name][hub_key] = []
+            
+            existing_p = next((p for p in customer_map[acc_name][hub_key] if p["name"] == res_name), None)
+            if existing_p:
+                existing_p["hours"] = round(existing_p.get("hours", 0.0) + hrs, 1)
+                # 40 hrs per week standard = 100%
+                existing_p["allocation_pct"] = min(100, max(0, round((existing_p["hours"] / 40.0) * 100)))
+            else:
+                p_pct = min(100, max(0, round((hrs / 40.0) * 100))) if hrs > 0 else 0
+                customer_map[acc_name][hub_key].append({
+                    "name": res_name,
+                    "ldap": ldap,
+                    "role": role,
+                    "hours": round(hrs, 1),
+                    "allocation_pct": p_pct
+                })
+            customer_map[acc_name]["total_hours"] = round(customer_map[acc_name]["total_hours"] + hrs, 1)
 
     for c in customer_map.values():
         c["total_hours"] = round(c["total_hours"], 1)
@@ -152,6 +158,12 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                         elif r_match.get("weekly_hours", 0.0) > 0:
                             p["allocation_pct"] = min(100, round((r_match["weekly_hours"] / 40.0) * 100))
 
+
+    valid_customers = {}
+    for acc_k, c_obj in customer_map.items():
+        if acc_k and acc_k != "Strategic Partner" and (c_obj.get("total_hours", 0.0) > 0 or len(c_obj.get("EMEA", [])) > 0 or len(c_obj.get("GSD", [])) > 0):
+            valid_customers[acc_k] = c_obj
+    customer_map = valid_customers
 
     resources_list = list(resource_map.values())
     total_cap = 0.0

@@ -1088,6 +1088,9 @@
               <option value="EMEA">EMEA Delivery Pool</option>
               <option value="GSD">GSD Delivery Pool</option>
             </select>
+            <select id="roster-filter-manager" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
+              <option value="ALL">All Managers</option>
+            </select>
             <select id="roster-filter-risk" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
               <option value="ALL">All Allocation Statuses</option>
               <option value="Staffed">100% Fully Staffed</option>
@@ -1107,7 +1110,7 @@
           <table class="w-full text-left text-xs border-collapse">
             <thead>
               <tr class="bg-slate-50/95 backdrop-blur-md sticky top-0 z-10 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
-                <th class="p-3.5 font-semibold">Resource Name</th>
+                <th class="p-3.5 font-semibold min-w-[200px]">Resource Name</th>
                 <th class="p-3.5 font-semibold">Region &amp; Location</th>
                 <th class="p-3.5 font-semibold">Language</th>
                 <th class="p-3.5 font-semibold w-1/4">Account / Project</th>
@@ -2588,15 +2591,22 @@
         if (globalData && globalData.resources) {
           globalData.resources.forEach(r => {
             r.ldap = sanitizeLdap(r.ldap, r.email, r.name);
+            if (r.manager_ldap) r.manager_ldap = sanitizeLdap(r.manager_ldap, "", "");
           });
         }
         if (globalData && globalData.customerPortfolio) {
+          globalData.customerPortfolio = globalData.customerPortfolio.filter(c => 
+            c && c.account_name && 
+            c.account_name !== "Strategic Partner" && 
+            (c.total_hours > 0 || (c.EMEA && c.EMEA.length > 0) || (c.GSD && c.GSD.length > 0))
+          );
           globalData.customerPortfolio.forEach(c => {
             (c.EMEA || []).forEach(m => { m.ldap = sanitizeLdap(m.ldap, m.email, m.name); });
             (c.GSD || []).forEach(m => { m.ldap = sanitizeLdap(m.ldap, m.email, m.name); });
           });
         }
 
+        populateManagerFilter();
         updateDashboardKPIs();
         renderBoard();
         renderRosterTable();
@@ -2899,7 +2909,11 @@
       if (!grid) return;
       grid.innerHTML = "";
 
-      const customers = (globalData.customerPortfolio || []).slice().sort((a, b) => (b.total_hours || 0) - (a.total_hours || 0)).slice(0, 5);
+      const customers = (globalData.customerPortfolio || [])
+        .filter(c => c && c.account_name && c.account_name !== "Strategic Partner" && (c.total_hours || 0) > 0)
+        .slice()
+        .sort((a, b) => (b.total_hours || 0) - (a.total_hours || 0))
+        .slice(0, 5);
       
       if (customers.length === 0) {
         grid.innerHTML = '<div class="col-span-5 text-center text-xs text-slate-400 py-6 italic">No customer records available.</div>';
@@ -3012,7 +3026,8 @@
       });
 
       const overallUtilPct = totalCap > 0 ? ((totalHrs / totalCap) * 100).toFixed(1) : "0.0";
-      const totalCustCount = customerPortfolio.length || 0;
+      const validCustomers = (customerPortfolio || []).filter(c => c && c.account_name && c.account_name !== "Strategic Partner" && (c.total_hours > 0 || (c.EMEA && c.EMEA.length > 0) || (c.GSD && c.GSD.length > 0)));
+      const totalCustCount = validCustomers.length || 0;
       const freeCapPct = totalCap > 0 ? (((totalCap - totalHrs) / totalCap) * 100).toFixed(1) + "%" : "0.0%";
 
       // Animated KPIs
@@ -3115,6 +3130,31 @@
       selectRollOffBucket(currentRollOffBucket || 'curr');
     }
 
+    function populateManagerFilter() {
+      const select = document.getElementById("roster-filter-manager");
+      if (!select) return;
+      const currentVal = select.value || "ALL";
+      const resources = (globalData && globalData.resources) || [];
+      const managerSet = new Set();
+      resources.forEach(r => {
+        if (r && r.manager_ldap) {
+          const m = r.manager_ldap.trim();
+          if (m) managerSet.add(m);
+        }
+      });
+      const sortedManagers = Array.from(managerSet).sort((a, b) => a.localeCompare(b));
+      
+      select.innerHTML = `<option value="ALL">All Managers (${sortedManagers.length})</option>`;
+      sortedManagers.forEach(mgr => {
+        const opt = document.createElement("option");
+        opt.value = mgr;
+        opt.textContent = `@${mgr}`;
+        if (mgr.toLowerCase() === currentVal.toLowerCase()) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+    window.populateManagerFilter = populateManagerFilter;
+
     function resetRosterFiltersAndShowAll() {
       const searchInput = document.getElementById("roster-search");
       if (searchInput) searchInput.value = "";
@@ -3122,6 +3162,8 @@
       if (langSelect) langSelect.value = "ALL";
       const regSelect = document.getElementById("roster-filter-reg");
       if (regSelect) regSelect.value = "ALL";
+      const mgrSelect = document.getElementById("roster-filter-manager");
+      if (mgrSelect) mgrSelect.value = "ALL";
       const riskSelect = document.getElementById("roster-filter-risk");
       if (riskSelect) riskSelect.value = "ALL";
       switchTab("roster");
@@ -3396,6 +3438,7 @@
         const q = (document.getElementById("roster-search")?.value || "").toLowerCase().trim();
         const langF = document.getElementById("roster-filter-lang")?.value || "ALL";
         const regF = document.getElementById("roster-filter-reg")?.value || "ALL";
+        const mgrF = (document.getElementById("roster-filter-manager")?.value || "ALL").trim();
         const riskF = document.getElementById("roster-filter-risk")?.value || "ALL";
 
         const resources = globalData.resources || [];
@@ -3409,6 +3452,7 @@
 
         resources.forEach(r => {
           if (!r) return;
+          if (mgrF !== "ALL" && (r.manager_ldap || "").toLowerCase() !== mgrF.toLowerCase()) return;
           if (regF !== "ALL") {
             const rReg = (r.region || "").toUpperCase();
             const rHub = (r.hub || "").toUpperCase();
@@ -3498,6 +3542,7 @@
             const matchQ = !q ||
               rName.toLowerCase().includes(q) ||
               rLdap.toLowerCase().includes(q) ||
+              (r.manager_ldap && r.manager_ldap.toLowerCase().includes(q)) ||
               projName.toLowerCase().includes(q) ||
               skillsStr.toLowerCase().includes(q);
 
@@ -3587,14 +3632,17 @@
               : ``;
 
             tr.innerHTML = `
-              <td class="p-3.5 pl-5 font-semibold text-slate-900">
+              <td class="p-3.5 pl-5 font-semibold text-slate-900 min-w-[200px]">
                 <div class="flex items-center gap-2.5">
                   <div class="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700 border border-indigo-150 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                     ${rName.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <div class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">${rName}</div>
-                    <div class="text-[10px] text-slate-400 font-mono">@${rLdap}</div>
+                    <div class="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
+                      <span>@${rLdap}</span>
+                      ${r.manager_ldap ? `<span class="text-slate-300">•</span><span class="text-indigo-600 font-semibold bg-indigo-50/70 border border-indigo-150 px-1.5 py-0.2 rounded text-[9px] inline-flex items-center gap-0.5" title="Direct Manager">👤 @${r.manager_ldap}</span>` : ''}
+                    </div>
                     ${multiProjIndicator}
                   </div>
                 </div>
@@ -3640,7 +3688,9 @@
 
     function renderPortfolioCards() {
       const q = (document.getElementById("portfolio-search")?.value || "").toLowerCase().trim();
-      let customers = (globalData.customerPortfolio || []).slice();
+      let customers = (globalData.customerPortfolio || [])
+        .filter(c => c && c.account_name && c.account_name !== "Strategic Partner" && (c.total_hours > 0 || (c.EMEA && c.EMEA.length > 0) || (c.GSD && c.GSD.length > 0)))
+        .slice();
       const container = document.getElementById("portfolio-cards-container");
       if (!container) return;
       container.innerHTML = "";
