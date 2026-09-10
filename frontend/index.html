@@ -247,22 +247,37 @@
       box-shadow: 0 2px 8px rgba(145, 94, 255, 0.35);
     }
 
-    /* Clean Tab Navigation with 3D Portfolio Glow */
+    /* Clean Tab Navigation with Proportional Flex Distribution */
     .nav-tab {
       position: relative;
       color: #aaa6c3 !important;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      padding: 0.4rem 0.55rem !important;
-      font-size: 0.725rem !important;
+      flex: 1 1 0% !important;
+      justify-content: center !important;
+      padding: 0.65rem 0.75rem !important;
+      font-size: 0.8125rem !important;
       border-bottom: 2.5px solid transparent !important;
       border-radius: 0.5rem 0.5rem 0 0 !important;
-      font-weight: 600;
+      font-weight: 600 !important;
       background-color: transparent !important;
       white-space: nowrap !important;
     }
     .nav-tab svg {
+      width: 1rem !important;
+      height: 1rem !important;
       color: #7b7899;
       transition: color 0.2s ease;
+      flex-shrink: 0;
+    }
+    @media (max-width: 1280px) {
+      .nav-tab {
+        padding: 0.5rem 0.5rem !important;
+        font-size: 0.75rem !important;
+      }
+      .nav-tab svg {
+        width: 0.875rem !important;
+        height: 0.875rem !important;
+      }
     }
     .nav-tab:hover {
       color: #ffffff !important;
@@ -397,9 +412,9 @@
 
         <!-- Right Header Actions -->
         <div class="flex items-center gap-2.5 mt-2 md:mt-0 flex-wrap">
-          <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs">
+          <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs" title="Weekly timecards close on Saturdays. 05 Sep 2026 is the latest closed reporting cycle. Current active week closes Saturday, 12 Sep 2026.">
             <span class="w-2 h-2 rounded-full bg-[#00cea8] animate-pulse"></span>
-            <span>Live Delivery Pool &bull; <strong class="text-white font-semibold" id="header-active-week">Week Ending: 05 Sep 2026</strong></span>
+            <span>Live Delivery Pool &bull; <strong class="text-white font-semibold" id="header-active-week">Latest Closed Week: 05 Sep 2026</strong></span>
           </div>
 
           <button id="btn-sync-bq" onclick="loadData(true)" class="inline-flex items-center gap-1.5 bg-[#151030] hover:bg-[#1f1745] text-[#e2e8f0] hover:text-white border border-[#372f6b] text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-200 shadow-xs hover:shadow-sm cursor-pointer" title="Sync live tables directly from BigQuery">
@@ -2564,7 +2579,9 @@
         });
         const headerActiveWeekEl = document.getElementById("header-active-week");
         if (headerActiveWeekEl && latestWeek) {
-          headerActiveWeekEl.textContent = `Week Ending: ${formatRosterDate(latestWeek)}`;
+          headerActiveWeekEl.textContent = `Latest Closed Week: ${formatRosterDate(latestWeek)}`;
+          const badgeEl = document.getElementById("live-week-badge");
+          if (badgeEl) badgeEl.title = `Weekly timecards close on Saturdays. Most recent closed cycle: ${formatRosterDate(latestWeek)}. Current active week ends Saturday, 12 Sep 2026.`;
         }
 
         // Sanitize LDAP on all resources & customer portfolio to guarantee no raw emails (e.g. shubhampathakk@google.com -> shubhampathakk)
