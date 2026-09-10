@@ -7,3 +7,4 @@ pydantic
 uvloop
 httptools
 pandas
+python-multipart

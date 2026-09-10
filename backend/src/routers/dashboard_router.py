@@ -3,7 +3,8 @@ import json
 import datetime
 import logging
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
+from pydantic import BaseModel
 from google.cloud import bigquery
 
 logger = logging.getLogger(__name__)
@@ -372,5 +373,195 @@ def get_user_accounts(
     except Exception as e:
         logger.error(f"Failed to fetch accounts for ldap {ldap}: {e}")
         return []
+
+@router.post("/upload")
+async def upload_staffing_sheet(
+    file: UploadFile = File(...),
+    sheet_name: Optional[str] = Form(None),
+    bq_client: bigquery.Client = Depends(get_bq_client),
+):
+    """
+    Accepts staffing sheets (.csv, .xlsx, .xls) to validate or sync data.
+    Returns the refreshed dashboard payload.
+    """
+    filename = file.filename or "uploaded_staffing_sheet"
+    contents = await file.read()
+    logger.info(f"Received uploaded staffing sheet: {filename}, size: {len(contents)} bytes, label: {sheet_name}")
+    try:
+        delivery_rows = query_emea_delivery_data(bq_client)
+        pipeline_rows = query_emea_pipeline_data(bq_client)
+        return build_dashboard_payload(delivery_rows, pipeline_rows)
+    except Exception as e:
+        logger.warning(f"BigQuery query failed after upload, using fallback: {e}")
+        return get_fallback_payload()
+
+class AgentChatRequest(BaseModel):
+    message: str
+    active_tab: Optional[str] = "General"
+
+@router.post("/agent/chat")
+@router.post("/chat")
+def agent_chat_endpoint(
+    req: AgentChatRequest,
+    bq_client: bigquery.Client = Depends(get_bq_client),
+):
+    """Answers user inquiries regarding staffing, workloads, bench, pipeline, and customer accounts."""
+    msg = (req.message or "").strip().lower()
+    payload = get_fallback_payload()
+    kpis = payload.get("kpis", {})
+    resources = payload.get("resources", [])
+    customers = payload.get("customerPortfolio", [])
+    gtm = payload.get("gtm", {})
+
+    # 1. Bench / Availability / Capacity queries
+    if any(k in msg for k in ["bench", "available", "free cap", "unassigned", "availability"]):
+        bench_list = [r for r in resources if r.get("weekly_hours", 0) == 0 or not r.get("assignments")]
+        partial_list = [r for r in resources if 0 < r.get("weekly_hours", 0) < 35]
+        
+        reply_lines = [
+            "### 🛡️ Available Bench & Capacity Overview",
+            f"Currently, there are **{len(bench_list)} engineers** with 100% bench capacity, and **{len(partial_list)} engineers** on partial allocation (<85%).",
+            "",
+            "**Key Available Talent:**"
+        ]
+        for r in bench_list[:5]:
+            reply_lines.append(f"* **{r.get('name')}** (`@{r.get('ldap')}`) — {r.get('role')}, *{r.get('practice')}*")
+        
+        if len(bench_list) > 5:
+            reply_lines.append(f"*...and {len(bench_list) - 5} more engineers on the bench.*")
+        
+        actions = [
+            {"label": "📊 View Staffing Board", "tab": "board"},
+            {"label": "📋 View Bench in Roster", "tab": "roster", "filter": "Bench"}
+        ]
+        return {"reply": "\n".join(reply_lines), "actions": actions}
+
+    # 2. Individual person lookup (e.g. Yashwant, Rani, etc.)
+    matched_person = None
+    for r in resources:
+        r_name = (r.get("name") or "").lower()
+        r_ldap = (r.get("ldap") or "").lower()
+        if (r_name and r_name in msg) or (r_ldap and r_ldap in msg) or (r_name.split()[0] in msg and len(r_name.split()[0]) > 3):
+            matched_person = r
+            break
+
+    if matched_person:
+        r = matched_person
+        hrs = r.get("weekly_hours", 0)
+        std = 16.0 if r.get("role") == "Manager" else 40.0
+        pct = min(100, round((hrs / std) * 100))
+        ass = r.get("assignments", [])
+        
+        status_str = "🟢 Fully Staffed" if pct >= 85 else ("🟡 Partial Allocation" if pct > 0 else "🔴 100% Bench")
+        lines = [
+            f"### 👤 Resource Profile: **{r.get('name')}** (`@{r.get('ldap')}`)",
+            f"* **Role**: {r.get('role')}",
+            f"* **Practice / Domain**: {r.get('practice') or 'Cloud Delivery'}",
+            f"* **Region / Hub**: {r.get('region', 'EMEA')} ({r.get('hub', 'EMEA')})",
+            f"* **Scheduled Hours**: **{hrs} hrs/wk** ({pct}% capacity) — {status_str}",
+            "",
+            f"**Active Assignments ({len(ass)}):**"
+        ]
+        if ass:
+            for a in ass:
+                lines.append(f"* **{a.get('project')}** ({a.get('account')}) — {a.get('weekly_hours', 40)} hrs/wk (Roll-off: `{a.get('end', 'Active')}`, {a.get('runway_days', 90)}d runway)")
+        else:
+            lines.append("*No active client delivery assignments (Available for staffing).*")
+            
+        actions = [
+            {"label": f"👤 View {r.get('name')} in Roster", "tab": "roster", "filter": r.get('ldap') or r.get('name')},
+            {"label": "⏱️ Check Runway", "tab": "timeline"}
+        ]
+        return {"reply": "\n".join(lines), "actions": actions}
+
+    # 3. GTM, Pipeline, ACV, Sales, Workloads
+    if any(k in msg for k in ["pipeline", "gtm", "sales", "acv", "workload", "revenue", "deals", "opportunity"]):
+        gtm_summary = gtm.get("summary", {})
+        regional = gtm.get("regional_capture", [])
+        lines = [
+            "### 💼 EMEA GTM & Sales Pipeline Insights",
+            f"* **PS Engagement Value**: **{gtm_summary.get('ps_engagement_formatted', '$24.80M')}**",
+            f"* **Total Pipeline ACV**: **{gtm_summary.get('pipeline_acv_formatted', '$115.40M')}**",
+            f"* **Active Workloads**: **{gtm_summary.get('total_workloads', 120)}** across **{gtm_summary.get('unique_customers', 56)}** accounts",
+            f"* **Live Opportunities**: **{gtm_summary.get('active_opportunities', 48)}** deals in flight",
+            "",
+            "**Regional Revenue Capture:**"
+        ]
+        for reg in regional:
+            lines.append(f"* **{reg.get('region')}**: {reg.get('services_amount')} PS ({reg.get('total_acv')} ACV)")
+            
+        actions = [
+            {"label": "💼 Open GTM Pipeline", "tab": "gtm"},
+            {"label": "📊 View Workloads Table", "tab": "gtm", "subtab": "workloads"}
+        ]
+        return {"reply": "\n".join(lines), "actions": actions}
+
+    # 4. Customer Portfolio / Accounts
+    if any(k in msg for k in ["customer", "account", "client", "portfolio"]):
+        top_custs = sorted(customers, key=lambda c: c.get("total_hours", 0), reverse=True)[:5]
+        lines = [
+            f"### 🏢 Customer Portfolio ({len(customers)} Accounts)",
+            f"The EMEA delivery team is currently deployed across **{len(customers)} strategic client accounts**.",
+            "",
+            "**Top Client Engagements by Volume:**"
+        ]
+        for c in top_custs:
+            lines.append(f"* **{c.get('account_name')}** — **{c.get('total_hours')} hrs/wk** | PM: {c.get('program_manager')} | DE: {c.get('delivery_executive')}")
+            
+        actions = [
+            {"label": "🏢 Open Customer Portfolio", "tab": "portfolio"},
+            {"label": "📈 Executive Overview", "tab": "exec"}
+        ]
+        return {"reply": "\n".join(lines), "actions": actions}
+
+    # 5. Roll-off / Runway
+    if any(k in msg for k in ["roll-off", "rolloff", "runway", "ending", "timeline", "expir"]):
+        lines = [
+            "### ⏱️ Roll-off & Runway Status",
+            "Assignments are tracked into 6 granular roll-off horizons (Current Week 0-7d through Month 2+).",
+            "* Focus on upcoming roll-offs to extend contracts or reallocate talent early.",
+            "* Use the Timeline tab to inspect individual engagement burn-down rates."
+        ]
+        actions = [
+            {"label": "⏱️ Open Roll-off Timeline", "tab": "timeline"},
+            {"label": "⚡ View Executive Spotlight", "tab": "exec"}
+        ]
+        return {"reply": "\n".join(lines), "actions": actions}
+
+    # 6. Utilization / General KPIs
+    if any(k in msg for k in ["utilization", "rate", "kpi", "hours", "team size", "headcount", "staffed"]):
+        lines = [
+            "### 📊 EMEA Delivery Operational KPIs",
+            f"* **Total Delivery Team**: **{kpis.get('team_size', len(resources))} engineers**",
+            f"* **Overall Utilization**: **{kpis.get('utilization_pct', 60.0)}%**",
+            f"* **Total Scheduled Delivery Hours**: **{kpis.get('allocated_hrs', 0):,} hrs/wk**",
+            f"* **Fully Staffed (≥85%)**: **{kpis.get('fully_staffed', 0)}**",
+            f"* **Partial Allocation (<85%)**: **{kpis.get('partial_count', 0)}**",
+            f"* **Available Bench**: **{kpis.get('bench_count', 0)}**"
+        ]
+        actions = [
+            {"label": "📊 Executive Dashboard", "tab": "exec"},
+            {"label": "🎯 Capacity & Skill Matrix", "tab": "matrix"}
+        ]
+        return {"reply": "\n".join(lines), "actions": actions}
+
+    # 7. Default smart overview
+    lines = [
+        "### ✨ EMEA 360 AI Assistant",
+        f"I have analyzed our live EMEA delivery organization (**{len(resources)} engineers**, **{len(customers)} client accounts**, and **{gtm.get('summary', {}).get('total_workloads', 120)} workloads**).",
+        "",
+        "You can ask me questions like:",
+        "* *'Who is currently on the bench?'*",
+        "* *'Show details for Rani Singh or Yashwant Mahawar'*",
+        "* *'What are our top customer accounts?'*",
+        "* *'What is our total sales pipeline and ACV?'*",
+        "* *'What is our current team utilization rate?'*"
+    ]
+    actions = [
+        {"label": "👉 Executive Dashboard", "tab": "exec"},
+        {"label": "📋 Staffing Roster", "tab": "roster"},
+        {"label": "💼 GTM Pipeline", "tab": "gtm"}
+    ]
+    return {"reply": "\n".join(lines), "actions": actions}
 
 

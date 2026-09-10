@@ -291,6 +291,11 @@
       color: #00cea8 !important;
       border: 1px solid rgba(0, 206, 168, 0.35) !important;
     }
+    .nav-tab #nav-gtm-count {
+      background-color: #2e1d08 !important;
+      color: #fbbf24 !important;
+      border: 1px solid rgba(251, 191, 36, 0.35) !important;
+    }
     input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
     }
@@ -426,6 +431,11 @@
         <button onclick="switchTab('matrix')" id="tab-btn-matrix" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
           <span>Capacity &amp; Skill Matrix</span>
+        </button>
+        <button onclick="switchTab('gtm')" id="tab-btn-gtm" class="nav-tab px-3.5 py-2 font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span>GTM &amp; Sales Pipeline</span>
+          <span id="nav-gtm-count" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full">120</span>
         </button>
       </div>
     </div>
@@ -1042,6 +1052,8 @@
             </select>
             <select id="roster-filter-reg" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
               <option value="ALL">All EMEA Delivery (460)</option>
+              <option value="EMEA">EMEA Delivery Pool</option>
+              <option value="GSD">GSD Delivery Pool</option>
             </select>
             <select id="roster-filter-risk" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
               <option value="ALL">All Allocation Statuses</option>
@@ -1297,9 +1309,6 @@
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">REGION</span>
             <select id="gtm-filter-reg" onchange="filterGtmAll()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none">
               <option value="ALL">All</option>
-              <option value="EMEA">EMEA</option>
-              <option value="EMEA">EMEA</option>
-              <option value="EMEA">EMEA</option>
               <option value="EMEA">EMEA</option>
               <option value="GSD">GSD</option>
             </select>
@@ -3276,6 +3285,7 @@
         renderPortfolioCards();
         renderTimelineCards();
         renderSkillMatrix();
+        renderGtmView();
         if (!window.location.hash) {
           window.history.replaceState({ tab: currentTab }, "", `#${currentTab}`);
         } else {
@@ -3693,6 +3703,10 @@
       if (document.getElementById("nav-portfolio-count")) {
         document.getElementById("nav-portfolio-count").textContent = totalCustCount;
       }
+      if (document.getElementById("nav-gtm-count")) {
+        const gtmTotal = (globalData.gtm?.workloads || []).length || (globalData.gtm?.summary?.total_workloads) || 120;
+        document.getElementById("nav-gtm-count").textContent = gtmTotal;
+      }
       if (document.getElementById("portfolio-total-accounts-count")) {
         document.getElementById("portfolio-total-accounts-count").textContent = totalCustCount;
       }
@@ -3798,6 +3812,9 @@
     window.resetRosterFiltersAndShowAll = resetRosterFiltersAndShowAll;
 
     function viewInRoster(nameOrLdap) {
+      if (typeof closeBenchModal === 'function') closeBenchModal();
+      if (typeof closeEditModal === 'function') closeEditModal();
+      if (typeof closeAddResourceModal === 'function') closeAddResourceModal();
       resetRosterFiltersAndShowAll();
       const searchInput = document.getElementById("roster-search");
       if (searchInput && nameOrLdap) {
@@ -3878,8 +3895,17 @@
 
         assignments.forEach(a => {
           if (a.project) projNames.push(a.project);
-          if (a.runway_days !== undefined && a.runway_days !== null && a.runway_days < minRunway) {
-            minRunway = a.runway_days;
+          let rd = a.runway_days;
+          if (rd === undefined || rd === null) {
+            if (a.end) {
+              try {
+                const endDate = new Date(a.end + "T00:00:00");
+                rd = Math.ceil((endDate - baseDate) / (1000 * 60 * 60 * 24));
+              } catch(e) { rd = 999; }
+            }
+          }
+          if (rd !== undefined && rd !== null && rd >= 0 && rd < minRunway) {
+            minRunway = rd;
           }
         });
 
@@ -4035,6 +4061,15 @@
       if (countRolling === 0) rollingContainer.innerHTML = '<div class="text-xs text-slate-400 text-center py-4 italic">No rolling-off members</div>';
       if (countPartial === 0) partialContainer.innerHTML = '<div class="text-xs text-slate-400 text-center py-4 italic">No partial allocations</div>';
       if (countStaffed === 0) staffedContainer.innerHTML = '<div class="text-xs text-slate-400 text-center py-4 italic">No staffed members</div>';
+
+      const elBench = document.getElementById("board-count-bench");
+      if (elBench) elBench.textContent = countBench;
+      const elRolling = document.getElementById("board-count-rolling");
+      if (elRolling) elRolling.textContent = countRolling;
+      const elPartial = document.getElementById("board-count-partial");
+      if (elPartial) elPartial.textContent = countPartial;
+      const elStaffed = document.getElementById("board-count-staffed");
+      if (elStaffed) elStaffed.textContent = countStaffed;
     }
 
     // Render Master Roster Table
@@ -4109,18 +4144,32 @@
           const isPersonPartial = (!isPersonBench && personEffPct < 85);
           const personAvailPct = isPersonBench ? 100 : (isPersonStaffed ? 0 : Math.max(0, 100 - personEffPct));
 
+          const hasOverdue = (activeDelivery.length > 0) && activeDelivery.some(a => {
+            if (!a.end) return false;
+            try { return new Date(a.end + "T00:00:00") < baseDate; } catch(e) { return false; }
+          });
+
           if (riskF === "Staffed" && !isPersonStaffed) return;
           if (riskF === "Partial" && !isPersonPartial) return;
           if (riskF === "Bench / Free" && !isPersonBench) return;
+          if (riskF === "Overdue" && !hasOverdue) return;
 
           // If person is on Bench, show 1 clean row as Bench / Available with 0% and no project dates.
           // If person is staffed, show their active delivery assignment(s).
-          const rowsToShow = isPersonBench
+          let rowsToShow = isPersonBench
             ? [{ project: "Bench / Available", start: "", end: "", hours: 0, weekly_hours: 0, allocation_pct: 0, runway_days: 0 }]
             : (activeDelivery.length > 0
                 ? activeDelivery
                 : [{ project: "Bench / Available", start: "", end: "", hours: 0, weekly_hours: 0, allocation_pct: 0, runway_days: 0 }]
               );
+
+          if (riskF === "Overdue") {
+            const overdueRows = activeDelivery.filter(a => {
+              if (!a.end) return false;
+              try { return new Date(a.end + "T00:00:00") < baseDate; } catch(e) { return false; }
+            });
+            if (overdueRows.length > 0) rowsToShow = overdueRows;
+          }
 
           rowsToShow.forEach(a => {
             const rName = r.name || "Unknown";
@@ -4339,7 +4388,7 @@
               }
             }
             if (pct === undefined || pct === null || isNaN(pct)) {
-              pct = 100;
+              pct = (p.hours ? Math.round((p.hours / 40.0) * 100) : 0);
             }
             pct = Math.max(0, Math.min(100, Math.round(pct)));
             peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition">${p.name} <span class="text-[10px] text-indigo-600 font-bold">(${pct}%)</span></span>`;
@@ -4828,7 +4877,7 @@
             }
           }
 
-          if (rd <= 7) {
+          if (rd >= 0 && rd <= 7) {
             rollingOffList.push({
               resource: r,
               assignment: a,
@@ -4847,10 +4896,22 @@
           (r.assignments || []).forEach(a => {
             const p = (a.project || "").toLowerCase();
             if (p.includes("presales") || p.includes("training") || p.includes("onboarding") || p.includes("bench") || p.includes("unassigned")) return;
+            let rd = a.runway_days;
+            if (rd === undefined || rd === null) {
+              if (a.end) {
+                try {
+                  const endD = new Date(a.end + "T00:00:00");
+                  rd = Math.ceil((endD - baseDate) / (1000 * 60 * 60 * 24));
+                } catch(e) { rd = 90; }
+              } else {
+                rd = 90;
+              }
+            }
+            if (rd < 0) return;
             allAss.push({
               resource: r,
               assignment: a,
-              runway_days: a.runway_days !== undefined ? a.runway_days : 90,
+              runway_days: rd,
               weekly_hours: a.weekly_hours || 40,
               allocation_pct: a.allocation_pct || 100
             });
@@ -5079,7 +5140,7 @@
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-1 rounded-lg">100% Free</span>
-              <button onclick="filterToSkill('${r.name}')" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-2xs hover:shadow-xs">
+              <button onclick="viewInRoster('${r.ldap || r.name}')" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-2xs hover:shadow-xs">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
                 Assign
               </button>
@@ -5119,6 +5180,8 @@
             }
           }
 
+          if (rd < 0) return;
+
           let targetBucket = 'later';
           if (rd <= 7) targetBucket = 'curr';
           else if (rd <= 14) targetBucket = 'next';
@@ -5127,7 +5190,7 @@
           else if (rd <= 60) targetBucket = 'w58';
 
           const tagClass = rd <= 7 ? "bg-[#ffe4e6] text-[#e11d48]" : (rd <= 21 ? "bg-[#fef3c7] text-[#92400e]" : "bg-[#dcfce7] text-[#166534]");
-          const tag = rd <= 0 ? "Ends Today" : `${rd} Days Left`;
+          const tag = rd === 0 ? "Ends Today" : (rd === 1 ? "1 Day Left" : `${rd} Days Left`);
 
           const isGsd = (r.hub === "GSD" || r.cost_center === "CC1" || (r.role || "").includes("DC") || (r.cost_center_name || "").includes("GSD"));
           buckets[targetBucket].resources.push({
@@ -5334,10 +5397,10 @@
       if (regList) {
         regList.innerHTML = "";
         const regData = gtm.regional_capture || [
-          { region: "EMEA", counts: 142, services_amount: "$9.35M", total_acv: "$118.50M", pct: 55.0 },
-          { region: "EMEA", counts: 86, services_amount: "$6.10M", total_acv: "$54.20M", pct: 25.2 },
-          { region: "EMEA", counts: 58, services_amount: "$2.05M", total_acv: "$28.40M", pct: 13.2 },
-          { region: "EMEA", counts: 34, services_amount: "$2.12M", total_acv: "$14.30M", pct: 6.6 }
+          { region: "UK & Ireland", counts: 142, services_amount: "$9.35M", total_acv: "$118.50M", pct: 55.0 },
+          { region: "Central Europe (DACH)", counts: 86, services_amount: "$6.10M", total_acv: "$54.20M", pct: 25.2 },
+          { region: "Southern Europe & MEA", counts: 58, services_amount: "$2.05M", total_acv: "$28.40M", pct: 13.2 },
+          { region: "Nordics & Benelux", counts: 34, services_amount: "$2.12M", total_acv: "$14.30M", pct: 6.6 }
         ];
 
         regData.forEach(r => {
@@ -5605,7 +5668,7 @@
       });
 
       if (document.getElementById("gtm-workload-table-count")) {
-        document.getElementById("gtm-workload-table-count").textContent = totalItems > 0 ? (totalItems >= 30 ? "5,690" : totalItems) : 0;
+        document.getElementById("gtm-workload-table-count").textContent = totalItems.toLocaleString();
       }
 
       // Render Pagination Buttons
