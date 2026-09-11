@@ -2403,6 +2403,14 @@
         }
 
         renderDataSourceBanner(globalData);
+        // The assistant's static welcome card is plain markup, so fill its
+        // scope line and starter chips from the real payload.
+        try {
+          const scopeEl = document.getElementById("agent-scope-line");
+          if (scopeEl) scopeEl.innerHTML = agentScopeLine();
+          const chipsEl = document.getElementById("agent-static-chips");
+          if (chipsEl) chipsEl.innerHTML = agentStarterChips("bg-slate-50 hover:bg-blue-50 border border-slate-200 text-blue-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition shadow-2xs cursor-pointer");
+        } catch (e) { /* non-fatal cosmetic */ }
 
         // Header active week now comes from a single scalar the backend
         // computes, instead of shipping ~1,300 raw rows to every browser.
@@ -5622,6 +5630,45 @@ Thank you!
       }
     }
 
+    // Scope line + starter chips for the assistant, built from the loaded
+    // payload. These used to be hardcoded ("87 engineers, 65 customer
+    // accounts, 5,690 workloads, $1.94B pipeline") and referenced Macy's,
+    // a US account left over from the demo content.
+    function agentScopeLine() {
+      const d = globalData || {};
+      const engineers = (d.resources || []).length;
+      const accounts = (d.customerPortfolio || []).filter(c => c && c.account_name).length;
+      const workloads = (d.gtm?.workloads || []).length || (d.gtm?.summary?.total_workloads) || 0;
+      const pipeline = d.gtm?.summary?.pipeline_acv_formatted;
+      const parts = [];
+      if (engineers) parts.push(`<strong>${engineers.toLocaleString()} engineers</strong>`);
+      if (accounts) parts.push(`<strong>${accounts.toLocaleString()} customer accounts</strong>`);
+      if (workloads) parts.push(`<strong>${workloads.toLocaleString()} workloads</strong>`);
+      if (pipeline && pipeline !== "\u2014") parts.push(`a <strong>${pipeline}</strong> pipeline`);
+      if (!parts.length) return "Ask me about staffing, bench capacity, roll-offs or pipeline demand.";
+      return "I can search across " + parts.join(", ").replace(/, ([^,]*)$/, " and $1") + ".";
+    }
+
+    function agentTopAccount() {
+      const list = (globalData.customerPortfolio || [])
+        .filter(c => c && c.account_name && (c.total_hours || 0) > 0)
+        .sort((a, b) => (b.total_hours || 0) - (a.total_hours || 0));
+      return list.length ? list[0].account_name : null;
+    }
+
+    function agentStarterChips(cls) {
+      const acct = agentTopAccount();
+      const chips = [
+        ["\u{1F464} Free on Bench?", "Who is free on the bench?"],
+        ["\u23F1 Rolling Off &lt;= 14d?", "Engineers rolling off in the next 14 days"],
+      ];
+      if (acct) chips.push([`\u{1F3E2} Who is on ${acct}?`, `Who is working on ${acct}?`]);
+      chips.push(["\u{1F4CA} Week 2 Demand Gap?", "Show Week 2 demand vs capacity"]);
+      return chips.map(([label, msg]) =>
+        `<button onclick="sendAgentMessage(${JSON.stringify(msg).replace(/"/g, "&quot;")})" class="${cls}">${label}</button>`
+      ).join("");
+    }
+
     function clearAgentChat() {
       const container = document.getElementById("agent-messages-container");
       if (!container) return;
@@ -5632,13 +5679,10 @@ Thank you!
             <span class="font-bold text-slate-900">Welcome to EMEA 360 Assistant</span>
           </div>
           <p class="text-slate-600 text-[11px] leading-relaxed">
-            I can search across all <strong>87 engineers</strong>, <strong>65 customer accounts</strong>, <strong>5,690 workloads</strong>, and our <strong>$1.94B pipeline</strong>.
+            ${agentScopeLine()}
           </p>
           <div class="flex flex-wrap gap-1.5 pt-1">
-            <button onclick="sendAgentMessage('Who is free on the bench?')" class="bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-lg transition shadow-2xs">👤 Free on Bench?</button>
-            <button onclick="sendAgentMessage('Engineers rolling off in the next 14 days')" class="bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-lg transition shadow-2xs">⏱ Rolling Off <= 14d?</button>
-            <button onclick="sendAgentMessage('Who is working on Macy\'s?')" class="bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-lg transition shadow-2xs">🏢 Who is on Macy's?</button>
-            <button onclick="sendAgentMessage('Show Week 2 demand vs capacity')" class="bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-lg transition shadow-2xs">📊 Week 2 Demand Gap?</button>
+            ${agentStarterChips("bg-white hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-lg transition shadow-2xs")}
           </div>
         </div>
       `;
@@ -5699,15 +5743,10 @@ Thank you!
           <span class="text-base">✨</span>
           <span class="font-bold text-slate-900 tracking-wide">Welcome to EMEA 360 Assistant</span>
         </div>
-        <p class="text-slate-600 text-[11px] leading-relaxed">
-          I can search across all <strong class="text-slate-900">87 engineers</strong>, <strong class="text-slate-900">65 customer accounts</strong>, <strong class="text-slate-900">5,690 workloads</strong>, and our <strong class="text-blue-700 font-mono">$1.94B pipeline</strong>.
+        <p class="text-slate-600 text-[11px] leading-relaxed" id="agent-scope-line">
+          Ask me about staffing, bench capacity, roll-offs or pipeline demand.
         </p>
-        <div class="flex flex-wrap gap-1.5 pt-1">
-          <button onclick="sendAgentMessage('Who is free on the bench?')" class="bg-slate-50 hover:bg-blue-50 border border-slate-200 text-blue-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition shadow-2xs cursor-pointer">👤 Free on Bench?</button>
-          <button onclick="sendAgentMessage('Engineers rolling off in the next 14 days')" class="bg-slate-50 hover:bg-blue-50 border border-slate-200 text-blue-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition shadow-2xs cursor-pointer">⏱ Rolling Off &lt;= 14d?</button>
-          <button onclick="sendAgentMessage('Who is working on Macy\'s?')" class="bg-slate-50 hover:bg-blue-50 border border-slate-200 text-blue-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition shadow-2xs cursor-pointer">🏢 Who is on Macy's?</button>
-          <button onclick="sendAgentMessage('Show Week 2 demand vs capacity')" class="bg-slate-50 hover:bg-blue-50 border border-slate-200 text-blue-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition shadow-2xs cursor-pointer">📊 Week 2 Demand Gap?</button>
-        </div>
+        <div class="flex flex-wrap gap-1.5 pt-1" id="agent-static-chips"></div>
       </div>
 
     </div>
