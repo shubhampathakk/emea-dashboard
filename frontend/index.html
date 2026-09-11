@@ -4571,6 +4571,18 @@
       });
     }
 
+    // A bucket holds one entry per ASSIGNMENT, so counting entries counts a
+    // person once per ending project. Headline figures must count people.
+    function uniqueRollOffPeople(entries) {
+      const seen = new Set();
+      (entries || []).forEach(e => {
+        if (!e) return;
+        seen.add(e.ldap || e.name);
+      });
+      return seen.size;
+    }
+    window.uniqueRollOffPeople = uniqueRollOffPeople;
+
     function getRollOffBuckets() {
       const resources = globalData.resources || [];
       const baseDate = new Date();
@@ -4660,7 +4672,10 @@
         const countDiv = document.getElementById(`bucket-count-${k}`);
         const barDiv = document.getElementById(`bucket-bar-${k}`);
         if (allBuckets[k]) {
-          const c = allBuckets[k].resources.length;
+          // One entry is pushed per ASSIGNMENT, but this label says "res".
+          // Somebody on three ending projects is one person, not three - the
+          // buckets used to sum to 154 in an 86-person org.
+          const c = uniqueRollOffPeople(allBuckets[k].resources);
           if (countDiv) countDiv.textContent = `${c} res`;
           if (barDiv) {
             const h = Math.min(96, Math.max(16, Math.round((c / Math.max(1, (globalData.resources || []).length)) * 300)));
@@ -4683,20 +4698,24 @@
         `;
       }
       const badge = document.getElementById("exec-bucket-badge");
+      const bucketPeople = uniqueRollOffPeople(data.resources);
+      const bucketAssignments = data.resources.length;
       if (badge) {
-        badge.textContent = `${data.resources.length} Resources (${data.resources.length} Assignments)`;
+        // These two used to print the same number, so 123 assignments were
+        // reported as 123 resources.
+        badge.textContent = `${bucketPeople} Resource${bucketPeople === 1 ? "" : "s"} (${bucketAssignments} Assignment${bucketAssignments === 1 ? "" : "s"})`;
       }
 
       const bannerText = document.getElementById("exec-bucket-banner-text");
       if (bannerText) {
         if (key === 'curr') {
-          bannerText.innerHTML = `<strong>Immediate Roll-off:</strong> ${data.resources.length} team members scheduled to complete delivery milestones this week (0-7 days). Action required to extend or reallocate to bench.`;
+          bannerText.innerHTML = `<strong>Immediate Roll-off:</strong> ${bucketPeople} team members scheduled to complete delivery milestones this week (0-7 days). Action required to extend or reallocate to bench.`;
         } else if (key === 'next') {
-          bannerText.innerHTML = `<strong>Upcoming Roll-off:</strong> ${data.resources.length} team members rolling off next week (8-14 days).`;
+          bannerText.innerHTML = `<strong>Upcoming Roll-off:</strong> ${bucketPeople} team members rolling off next week (8-14 days).`;
         } else if (key === 'w3' || key === 'w4') {
-          bannerText.innerHTML = `<strong>Medium Runway:</strong> ${data.resources.length} team members scheduled to complete delivery milestones in weeks 3-4 (15-28 days).`;
+          bannerText.innerHTML = `<strong>Medium Runway:</strong> ${bucketPeople} team members scheduled to complete delivery milestones in weeks 3-4 (15-28 days).`;
         } else {
-          bannerText.innerHTML = `<strong>Extended Delivery:</strong> ${data.resources.length} team members actively deployed on multi-month customer engagements.`;
+          bannerText.innerHTML = `<strong>Extended Delivery:</strong> ${bucketPeople} team members actively deployed on multi-month customer engagements.`;
         }
       }
 
