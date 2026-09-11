@@ -80,9 +80,11 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             continue
         cc = str(row.get("cost_center") or "").strip().upper()
         cc_name = str(row.get("cost_center_name") or "").upper()
-        # Unified EMEA resourcing: all delivery resources belong to the EMEA pool (CC1 is EMEA ring-fenced)
-        reg = "EMEA"
-        hub_key = "EMEA"
+        # Use the region/hub the SQL actually derived. These were previously
+        # hardcoded to "EMEA", which discarded the derivation and left the
+        # GSD side of every hub split permanently empty.
+        reg = row.get("region") or "Unknown"
+        hub_key = "GSD" if str(row.get("hub") or "").upper() == "GSD" else "EMEA"
 
         res_name = row.get("resource_name") or "Unknown Engineer"
         res_id = row.get("resource_id") or res_name
@@ -125,8 +127,12 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         cap = standard_capacity(role)
         alloc_pct = min(100, round((hrs / cap) * 100)) if cap > 0 else 0
 
-        if res_name not in resource_map:
-            resource_map[res_name] = {
+        # Key by resource_id, not display name: two people who share a full
+        # name would otherwise be merged into one record, silently dropping
+        # the second person's capacity and hours from every KPI.
+        res_key = res_id
+        if res_key not in resource_map:
+            resource_map[res_key] = {
                 "id": res_id,
                 "name": res_name,
                 "ldap": ldap,
@@ -135,8 +141,8 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "role": role,
                 "cost_center": cc,
                 "cost_center_name": row.get("cost_center_name") or "",
-                "region": "EMEA",
-                "hub": "EMEA",
+                "region": reg,
+                "hub": hub_key,
                 "languages": ["English"],
                 "practice": practice,
                 "skills": practice,
@@ -145,13 +151,13 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "weekly_hours": float(row.get("scheduled_timecard_hours") or 0),
                 "assignments": []
             }
-        elif mgr_ldap and not resource_map[res_name].get("manager_ldap"):
-            resource_map[res_name]["manager_ldap"] = mgr_ldap
-            resource_map[res_name]["manager_name"] = mgr_name
+        elif mgr_ldap and not resource_map[res_key].get("manager_ldap"):
+            resource_map[res_key]["manager_ldap"] = mgr_ldap
+            resource_map[res_key]["manager_name"] = mgr_name
 
         # Only a real, named project counts as an assignment.
         if has_project:
-            resource_map[res_name]["assignments"].append({
+            resource_map[res_key]["assignments"].append({
                 "project": proj_name or "Cloud Transformation",
                 "account": acc_name or "Unassigned Account",
                 "weekly_hours": hrs,
@@ -195,23 +201,34 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 })
             customer_map[acc_name]["total_hours"] = round(customer_map[acc_name]["total_hours"] + hrs, 1)
 
+    # resource_map is keyed by resource_id, so build a name index for the
+    # portfolio backfill below.
+    resource_by_name: Dict[str, Dict[str, Any]] = {}
+    for _r in resource_map.values():
+        resource_by_name.setdefault(_r["name"], _r)
+
     for c in customer_map.values():
         c["total_hours"] = round(c["total_hours"], 1)
         for hub_k in ["EMEA", "GSD"]:
             for p in c.get(hub_k, []):
+                # Each person's own capacity: 16h for managers, 40h otherwise.
+                # Previously these three denominators were hardcoded to 40.0,
+                # which understated every manager's allocation on an account.
+                p_cap = float(p.get("capacity_hours") or 40.0) or 40.0
                 if p.get("allocation_pct") is None or p.get("allocation_pct") == 0:
                     pHrs = p.get("hours", 0.0)
                     if pHrs > 0:
-                        p["allocation_pct"] = min(100, round((pHrs / 40.0) * 100))
-                    elif p["name"] in resource_map:
-                        r_match = resource_map[p["name"]]
+                        p["allocation_pct"] = min(100, round((pHrs / p_cap) * 100))
+                    elif p["name"] in resource_by_name:
+                        r_match = resource_by_name[p["name"]]
+                        r_cap = float(r_match.get("capacity_hours") or p_cap) or p_cap
                         acc_ass = [a for a in r_match.get("assignments", []) if a.get("account") == c["account_name"]]
                         if acc_ass:
                             sum_hrs = sum(a.get("weekly_hours", 0.0) for a in acc_ass)
                             p["hours"] = round(sum_hrs, 1)
-                            p["allocation_pct"] = min(100, round((sum_hrs / 40.0) * 100))
+                            p["allocation_pct"] = min(100, round((sum_hrs / r_cap) * 100))
                         elif r_match.get("weekly_hours", 0.0) > 0:
-                            p["allocation_pct"] = min(100, round((r_match["weekly_hours"] / 40.0) * 100))
+                            p["allocation_pct"] = min(100, round((r_match["weekly_hours"] / r_cap) * 100))
 
 
     valid_customers = {}
@@ -243,7 +260,9 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         pct = min(100, round((r["weekly_hours"] / std) * 100)) if std > 0 else 0
         r["allocation_pct"] = pct
 
-        hub_key = "EMEA"
+        # Roll up under the person's real hub. This was hardcoded to "EMEA",
+        # which zeroed out the GSD side of every hub breakdown.
+        hub_key = "GSD" if str(r.get("hub") or "").upper() == "GSD" else "EMEA"
         hubs[hub_key]["people"] += 1
         hubs[hub_key]["allocs"] += len(r["assignments"])
         hubs[hub_key]["hours"] += r["weekly_hours"]

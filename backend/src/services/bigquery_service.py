@@ -88,14 +88,26 @@ def query_emea_delivery_data(
 
     query = """
     WITH anchor AS (
-      -- The single week the dashboard reports on: the week we are currently in
-      -- (first week_ending on/after today). Falls back to the latest available
-      -- week if the feed has no forward-dated weeks.
+      -- The single week the dashboard reports on, CLAMPED TO THE REQUESTED
+      -- WINDOW. Previously this was pinned to CURRENT_DATE() unconditionally,
+      -- so selecting a historical date range moved the roster window but still
+      -- reported this week's hours, allocations and OOO against it.
+      -- Order of preference:
+      --   1. the current week, when it falls inside the requested window
+      --   2. the latest week inside the requested window
+      --   3. the latest week available (window matches nothing)
+      -- With the default window (today-90 .. today+14) this resolves to
+      -- exactly the same week as before.
       SELECT COALESCE(
         (SELECT MIN(timecard_week_ending)
            FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
           WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
-            AND timecard_week_ending >= CURRENT_DATE()),
+            AND timecard_week_ending >= CURRENT_DATE()
+            AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)),
+        (SELECT MAX(timecard_week_ending)
+           FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+          WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+            AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)),
         (SELECT MAX(timecard_week_ending)
            FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
           WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`))
@@ -120,7 +132,12 @@ def query_emea_delivery_data(
                       OR COALESCE(region, pso_region, '') LIKE '%GSD%'
                       OR cost_center = 'CC1'), 'GSD', 'EMEA') AS hub,
         ANY_VALUE(practice) AS practice,
-        LOGICAL_OR(OOO) AS is_ooo
+        -- OOO for the ANCHOR WEEK only. Previously this was LOGICAL_OR(OOO)
+        -- across the whole ~15-week window, so "ON LEAVE" flagged anyone who
+        -- took a day off in the last three months (31 of 86) rather than the
+        -- people actually out this week (2).
+        LOGICAL_OR(COALESCE(OOO, FALSE)
+                   AND timecard_week_ending = (SELECT wk FROM anchor)) AS is_ooo
       FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
       WHERE __ROSTER_SCOPE__
         AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
@@ -152,6 +169,12 @@ def query_emea_delivery_data(
         ANY_VALUE(SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(project_end_date AS STRING), 1, 10))) AS project_end_date,
         ANY_VALUE(project_status) AS project_status
       FROM `concord-prod.service_cloudbi.projects`
+      -- MUST pin the partition. This table keeps ~1,074 daily snapshots of the
+      -- same ~110k projects (60M rows, back to 2023-09). Without this filter
+      -- ANY_VALUE() picks an arbitrary historical version of project_end_date,
+      -- so runway/roll-off dates and the "already ended" filter were computed
+      -- against dates that could be years out of date.
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.projects`)
       GROUP BY project_id
     ),
     week_assignments AS (

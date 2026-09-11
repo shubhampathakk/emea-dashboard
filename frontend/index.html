@@ -1069,7 +1069,7 @@
 
             <!-- Search Input -->
             <div class="relative">
-              <input type="text" id="exec-bench-search" onkeyup="filterExecBench()" placeholder="Filter bench talent by name, skill, language, or region..." class="bg-slate-50/80 text-xs border border-slate-200/90 rounded-xl pl-9 pr-4 py-2.5 w-full focus:outline-none focus:border-indigo-500 shadow-inner">
+              <input type="text" id="exec-bench-search" onkeyup="filterExecBench()" placeholder="Filter bench talent by name, skill, or region..." class="bg-slate-50/80 text-xs border border-slate-200/90 rounded-xl pl-9 pr-4 py-2.5 w-full focus:outline-none focus:border-indigo-500 shadow-inner">
               <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
               </svg>
@@ -1224,7 +1224,9 @@
               <tr class="bg-slate-50/95 backdrop-blur-md sticky top-0 z-10 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
                 <th class="p-3.5 font-semibold min-w-[200px]">Resource Name</th>
                 <th class="p-3.5 font-semibold">Region &amp; Location</th>
-                <th class="p-3.5 font-semibold">Language</th>
+<!-- Language column removed: the source dataset carries no language
+                     data, so this rendered a hardcoded "English" for every
+                     person. Restore alongside real language data. -->
                 <th class="p-3.5 font-semibold w-1/4">Account / Project</th>
                 <th class="p-3.5 font-semibold w-1/5">Skill / Practice</th>
                 <th class="p-3.5 font-semibold whitespace-nowrap">Dates (Start &rarr; End)</th>
@@ -1296,7 +1298,7 @@
       <!-- Top Filters Row -->
       <div class="flex flex-col md:flex-row justify-between items-center gap-3">
         <div class="relative w-full max-w-xl">
-          <input type="text" id="timeline-search" onkeyup="renderTimelineCards()" placeholder="Filter timeline by Resource Name, LDAP, Language, Skill, or Project..." class="w-full bg-white text-xs border border-slate-200/80 rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500 shadow-sm">
+          <input type="text" id="timeline-search" onkeyup="renderTimelineCards()" placeholder="Filter timeline by Resource Name, LDAP, Skill, or Project..." class="w-full bg-white text-xs border border-slate-200/80 rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-indigo-500 shadow-sm">
           <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
@@ -1326,7 +1328,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b border-slate-100">
           <div>
             <h3 class="font-title text-sm font-bold text-slate-900 tracking-tight">Resource Roll-off &amp; Runway Timeline</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Primary view by Resource Name with language proficiencies, project assignments, roll-off dates, and remaining runway</p>
+            <p class="text-xs text-slate-400 mt-0.5">Primary view by Resource Name with project assignments, roll-off dates, and remaining runway</p>
           </div>
           <span class="bg-[#eef2ff] text-[#4338ca] text-xs font-bold px-3.5 py-1.5 rounded-full border border-indigo-100 shadow-2xs" id="timeline-active-count">76 Delivery Resources</span>
         </div>
@@ -1908,7 +1910,7 @@
       <!-- Search & Status Bar -->
       <div class="p-4 px-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white">
         <div class="relative w-full max-w-lg">
-          <input type="text" id="modal-bench-search" onkeyup="filterModalBench()" placeholder="Search talent by Name, Region, Language, or Skill..." class="w-full bg-slate-50/50 text-xs border border-slate-200/90 rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition">
+          <input type="text" id="modal-bench-search" onkeyup="filterModalBench()" placeholder="Search talent by Name, Region, or Skill..." class="w-full bg-slate-50/50 text-xs border border-slate-200/90 rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition">
           <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
@@ -2934,7 +2936,9 @@
           }
         } else {
           if (allocPct > 0 && allocPct < 100) {
-            const availHrs = Math.max(0, 40 - Math.round(rHours));
+            // Against this person's own capacity, not a flat 40h: a manager
+            // on 10 of their 16 hours has 6 free, not 30.
+            const availHrs = Math.max(0, capacityFor(r) - Math.round(rHours));
             const freePct = Math.max(0, 100 - allocPct);
             list.push({
               name: r.name,
@@ -3134,7 +3138,12 @@
         const totalPeople = emeaCount + gsdCount;
         const totalHrs = Math.round(c.total_hours || 0);
 
-        let pillsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${totalPeople} EMEA Delivery</span>`;
+        // Label by the real hub split. This previously always read
+        // "N EMEA Delivery" even when every person on the account is GSD.
+        const hubLabel = (emeaCount && gsdCount)
+          ? `${emeaCount} EMEA &bull; ${gsdCount} GSD`
+          : (gsdCount ? `${gsdCount} GSD Delivery` : `${emeaCount} EMEA Delivery`);
+        let pillsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${hubLabel}</span>`;
 
         const safeAcc = c.account_name.replace(/'/g, "\\'");
         const card = document.createElement("div");
@@ -3941,7 +3950,7 @@
                 </div>
               </td>
               <td class="p-3.5">${regBadge}</td>
-              <td class="p-3.5 text-slate-500 text-xs">${rLangs}</td>
+              <!-- Language cell removed with its column header (always "English"). -->
               <td class="p-3.5">${projCell}</td>
               <td class="p-3.5 text-[11px] text-slate-500 leading-tight">${skillsStr}</td>
               <td class="p-3.5 whitespace-nowrap">${dateDisplay}</td>
@@ -4070,12 +4079,21 @@
           leadershipBadges = `<span class="text-[10px] text-slate-400 font-medium bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-lg">DE / PgM: Unassigned</span>`;
         }
 
-        // Region summary counts
-        let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${totalPeople} EMEA Delivery</span>`;
+        // Region summary counts - by real hub, not a hardcoded "EMEA" label.
+        const pEmea = (c.EMEA || []).length;
+        const pGsd = (c.GSD || []).length;
+        const pHubLabel = (pEmea && pGsd)
+          ? `${pEmea} EMEA &bull; ${pGsd} GSD`
+          : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} EMEA Delivery`);
+        let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${pHubLabel}</span>`;
 
+        // Fallback sums each member's real capacity rather than assuming 40h
+        // a head, which overstated any account staffed by a 16h manager.
+        const fallbackHours = (c.EMEA || []).concat(c.GSD || [])
+          .reduce((acc, p) => acc + capacityFor(p), 0);
         const formattedHours = typeof c.total_hours === 'number'
           ? (Math.round(c.total_hours * 10) / 10)
-          : (parseFloat(c.total_hours) ? Math.round(parseFloat(c.total_hours) * 10) / 10 : (totalPeople * 40));
+          : (parseFloat(c.total_hours) ? Math.round(parseFloat(c.total_hours) * 10) / 10 : fallbackHours);
 
         card.innerHTML = `
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-150 pb-3">
@@ -4714,19 +4732,25 @@
       let oooCount = 0;
 
       let totalHrs = 0;
+      let totalCap = 0;
       resources.forEach(r => {
         if (r.is_ooo) oooCount++;
+        // Each person's real capacity (16h for managers, 40h otherwise).
+        const stdCap = capacityFor(r);
+        totalCap += stdCap;
         const rHrs = (r.weekly_hours !== undefined && r.weekly_hours !== null)
           ? Number(r.weekly_hours)
-          : Math.min(40.0, (r.assignments || []).reduce((acc, a) => acc + (a.weekly_hours !== undefined ? a.weekly_hours : (a.hours || 0) * 5), 0));
-        
+          : Math.min(stdCap, (r.assignments || []).reduce((acc, a) => acc + (a.weekly_hours !== undefined ? a.weekly_hours : (a.hours || 0) * 5), 0));
+
         totalHrs += rHrs;
         if (rHrs === 0) {
           benchList.push(r);
         }
       });
 
-      const totalCap = resources.length * 40.0;
+      // Denominator must be the sum of real capacities. Using
+      // `resources.length * 40` overstated capacity by the 24h/week that each
+      // manager does not have, reporting 18.5% free against a true 14.4%.
       const freeCapPct = totalCap > 0 ? Math.max(0, (((totalCap - totalHrs) / totalCap) * 100)).toFixed(1) : "0.0";
 
       if (document.getElementById("exec-bench-header-badge")) {
