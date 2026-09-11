@@ -2369,16 +2369,28 @@
         }
 
         let res;
-        // Only send a token we know has not expired; an expired token makes
-        // the backend fall back to cached data.
-        const token = (typeof window.getValidToken === 'function')
-          ? window.getValidToken()
-          : window.bqAccessToken;
-        const headers = { "Content-Type": "application/json" };
-        if (token) {
-          headers["X-User-OAuth-Token"] = token;
-          headers["X-Google-OAuth-Token"] = token;
+        // Get a token guaranteed to be valid right now. ensureFreshToken()
+        // renews silently via Google Identity Services when the cached one is
+        // missing or near expiry, so a reload always attempts live data.
+        let token = (typeof window.ensureFreshToken === 'function')
+          ? await window.ensureFreshToken()
+          : ((typeof window.getValidToken === 'function') ? window.getValidToken() : window.bqAccessToken);
+
+        // An explicit "Sync BQ" click IS a user gesture, so we are allowed to
+        // open the Google popup here. This is the one place a dead session can
+        // be recovered without a full sign-out/sign-in.
+        if (!token && syncBq && typeof window.requestInteractiveToken === 'function') {
+          token = await window.requestInteractiveToken();
         }
+        const buildHeaders = (t) => {
+          const h = { "Content-Type": "application/json" };
+          if (t) {
+            h["X-User-OAuth-Token"] = t;
+            h["X-Google-OAuth-Token"] = t;
+          }
+          return h;
+        };
+        let headers = buildHeaders(token);
 
         const params = new URLSearchParams();
         if (sDate) params.append("start_date", sDate);
@@ -2400,6 +2412,17 @@
         } else {
           res = await fetch('/api/data' + qs, { headers });
           globalData = await res.json();
+
+          // Backend answered from the cached snapshot - almost always a dead
+          // token. We cannot renew without a user gesture (see the auth
+          // module), so draw attention to the one control that can.
+          if (globalData.data_source !== "bigquery") {
+            const sb = document.getElementById("btn-sync-bq");
+            if (sb) {
+              sb.classList.add("ring-2", "ring-amber-400");
+              sb.title = "Not live - click to reconnect to BigQuery";
+            }
+          }
         }
 
         renderDataSourceBanner(globalData);
@@ -5780,7 +5803,9 @@ Thank you!
     </button>
   </div>
 
-<div id="sync-toast" class="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl text-xs font-semibold shadow-xl flex items-center gap-2 border border-emerald-200 bg-emerald-50 text-emerald-800 transition-all duration-300 transform translate-y-10 opacity-0">✅ BigQuery Synced: Live data refreshed from hpkaur-test!</div>
+<div id="sync-toast" class="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl text-xs font-semibold shadow-xl flex items-center gap-2 border border-emerald-200 bg-emerald-50 text-emerald-800 transition-all duration-300 transform translate-y-10 opacity-0"></div>
+<!-- Google Identity Services: silent BigQuery access-token refresh -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -5863,15 +5888,132 @@ Thank you!
   window.getValidToken = getValidToken;
   window.clearBqToken = clearToken;
 
+  // ---------------------------------------------------------------------
+  // Silent token refresh via Google Identity Services.
+  //
+  // Firebase hands back credential.accessToken exactly once, at the moment
+  // of the popup, and never refreshes it - Firebase only refreshes its own
+  // ID token. So after ~1 hour every request fell back to cached data and
+  // the user had to click Sign In again.
+  //
+  // GIS initTokenClient({prompt: ''}) mints a fresh access token with no
+  // popup and no user gesture, provided the user has a live Google session
+  // and has already consented to the scope once. The popup path below stays
+  // as the fallback for the first-ever grant or a dead session.
+  // ---------------------------------------------------------------------
+  const OAUTH_CLIENT_ID = "673796126218-a7bvrq0ahrjkrkl8p2n34eirrk07t8sc.apps.googleusercontent.com";
+  const BQ_SCOPE = "https://www.googleapis.com/auth/bigquery";
+  // Renew this far ahead of expiry so a long-open tab never goes stale.
+  const REFRESH_LEAD_MS = 5 * 60 * 1000;
+
+  let tokenClient = null;
+  let pendingTokenResolve = null;
+  let refreshTimer = null;
+
+  function gisReady() {
+    return new Promise((resolve) => {
+      if (window.google?.accounts?.oauth2) return resolve(true);
+      let waited = 0;
+      const iv = setInterval(() => {
+        if (window.google?.accounts?.oauth2) { clearInterval(iv); resolve(true); }
+        else if ((waited += 100) > 8000) { clearInterval(iv); resolve(false); }
+      }, 100);
+    });
+  }
+
+  async function getTokenClient() {
+    if (tokenClient) return tokenClient;
+    if (!(await gisReady())) return null;
+    tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: OAUTH_CLIENT_ID,
+      scope: BQ_SCOPE,
+      // 'none' = attempt silently and fail with login_required/consent_required.
+      // An empty string means "use the default", which opens a popup - and a
+      // popup outside a user gesture is blocked by the browser.
+      prompt: "none",
+      callback: (resp) => {
+        const done = pendingTokenResolve;
+        pendingTokenResolve = null;
+        if (resp && resp.access_token) {
+          storeToken(resp.access_token, resp.expires_in);
+          scheduleRefresh(resp.expires_in);
+          if (done) done(resp.access_token);
+        } else if (done) {
+          done(null);
+        }
+      },
+      error_callback: () => {
+        const done = pendingTokenResolve;
+        pendingTokenResolve = null;
+        if (done) done(null);
+      }
+    });
+    return tokenClient;
+  }
+
+  // NOTE: there is deliberately no "silent" variant here.
+  //
+  // I tried GIS initTokenClient({prompt: 'none'}) expecting a hidden-iframe
+  // refresh. Verified against the live SDK: it sends prompt=none in the URL
+  // and STILL opens a popup window, which the browser blocks outside a user
+  // gesture. The GIS token model is popup-based by design and issues no
+  // refresh tokens. Attempting it on page load produced only
+  // "[GSI_LOGGER]: Failed to open popup window" errors and would trigger
+  // popup-blocker prompts for real users.
+  //
+  // Zero-click always-live requires the server-side Authorization Code flow
+  // with stored refresh tokens. Until then: renewal is gesture-driven.
+
+  // MUST be called from a user gesture (click) - it opens a popup.
+  async function requestInteractiveToken() {
+    const client = await getTokenClient();
+    if (!client) return null;
+    return new Promise((resolve) => {
+      pendingTokenResolve = resolve;
+      setTimeout(() => {
+        if (pendingTokenResolve === resolve) { pendingTokenResolve = null; resolve(null); }
+      }, 60000);
+      try {
+        client.requestAccessToken({ prompt: "" });
+      } catch (e) {
+        pendingTokenResolve = null;
+        resolve(null);
+      }
+    });
+  }
+  window.requestInteractiveToken = requestInteractiveToken;
+
+  // Nudge instead of popup: we cannot renew without a click, so make the
+  // click obvious just before the session dies.
+  function scheduleRefresh(expiresInSeconds) {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    const ttl = (expiresInSeconds ? Number(expiresInSeconds) : 3600) * 1000;
+    const delay = Math.max(30 * 1000, ttl - REFRESH_LEAD_MS);
+    refreshTimer = setTimeout(() => {
+      const btn = document.getElementById("btn-sync-bq");
+      if (btn) {
+        btn.classList.add("ring-2", "ring-amber-400");
+        btn.title = "Your live BigQuery session is about to expire - click to reconnect";
+      }
+      if (typeof showToast === 'function') {
+        showToast("Live BigQuery session expires shortly - click Sync BQ to stay live.", "error");
+      }
+    }, delay);
+  }
+
+  // Returns a token that is valid right now, or null. Never opens a popup.
+  async function ensureFreshToken() {
+    return getValidToken();
+  }
+  window.ensureFreshToken = ensureFreshToken;
+
   const cachedToken = getValidToken();
   if (cachedToken) {
     window.bqAccessToken = cachedToken;
     hideLoginOverlay();
-    if (typeof window.loadData === 'function') {
-      window.loadData();
-    }
+    if (typeof window.loadData === 'function') window.loadData();
   } else {
-    showLoginOverlay("Your BigQuery session has expired. Please sign in again to load live data.");
+    showLoginOverlay("Sign in with Google to load live BigQuery data.");
   }
 
   const loginBtn = document.getElementById("login-btn");
@@ -5883,8 +6025,11 @@ Thank you!
         const credential = GoogleAuthProvider.credentialFromResult(result);
         const token = credential?.accessToken;
         if (token) {
-          // Record the expiry so the token is not reused after it dies.
-          storeToken(token, result?._tokenResponse?.oauthExpireIn);
+          // Record the expiry so the token is not reused after it dies, and
+          // start the silent-renewal timer so this session never goes stale.
+          const ttl = result?._tokenResponse?.oauthExpireIn;
+          storeToken(token, ttl);
+          scheduleRefresh(ttl);
         }
         hideLoginOverlay();
         if (typeof window.loadData === 'function') {
