@@ -21,6 +21,27 @@ from src.services.manager_directory import get_manager_name
 
 router = APIRouter(tags=["Dashboard"])
 
+# Standard billable capacity per week.
+# NOTE: no role in the source data is ever the bare string "Manager" - the
+# previous `role == "Manager"` checks therefore never matched and every manager
+# was measured against a 40h week.
+#
+# The reduced 16h capacity is for *people managers* who still carry billable
+# work. In this dataset that is "Manager (Billable CON/SCE)" (21 people).
+# It deliberately does NOT include job families that merely contain the word
+# manager - "Technical Account Manager" (133), "Technical Success Account
+# Manager" (10), "Cloud Program Manager" (7) - who are not reduced-capacity
+# people managers. Matching those would shrink the capacity denominator by
+# ~3,600 h/wk and materially overstate utilisation.
+MANAGER_WEEKLY_CAPACITY = 16.0
+STANDARD_WEEKLY_CAPACITY = 40.0
+
+
+def standard_capacity(role: Optional[str]) -> float:
+    """Weekly billable capacity for a role. People managers carry a reduced load."""
+    return MANAGER_WEEKLY_CAPACITY if str(role or "").strip().lower().startswith("manager") else STANDARD_WEEKLY_CAPACITY
+
+
 def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Transforms delivery and pipeline records into the full frontend dashboard state."""
     resource_map: Dict[str, Dict[str, Any]] = {}
@@ -57,26 +78,36 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         practice = row.get("practice") or "Cloud Delivery"
         is_ooo = str(row.get("is_ooo") or "").lower() == "true"
         
-        proj_name = row.get("project_name") or "Delivery Project"
+        has_project = bool(row.get("project_id"))
+        proj_name = row.get("project_name") or ""
         acc_name = (row.get("account_name") or "").strip()
         pm_name = row.get("engagement_manager_name") or "Delivery Lead"
-        
+
+        # Assignment-level hours ONLY. This must not fall back to the person's
+        # total hours: doing so invented a phantom "Delivery Project" for every
+        # unassigned person and made the bench look staffed.
         try:
-            hrs = float(row.get("proj_scheduled_hours") or row.get("scheduled_timecard_hours") or 0)
+            hrs = float(row.get("proj_scheduled_hours") or 0)
         except (ValueError, TypeError):
             hrs = 0.0
 
-        start_date = str(row.get("project_start_date") or "2026-01-01")
-        end_date = str(row.get("project_end_date") or "2026-12-31")
+        # Real dates only. Previously these defaulted to 2026-01-01/2026-12-31,
+        # which fabricated a 12-month runway for rows with no project.
+        raw_start = row.get("project_start_date")
+        raw_end = row.get("project_end_date")
+        start_date = str(raw_start)[:10] if raw_start else ""
+        end_date = str(raw_end)[:10] if raw_end else ""
 
-        runway_days = 90
-        try:
-            end_dt = datetime.datetime.strptime(end_date[:10], "%Y-%m-%d").date()
-            runway_days = (end_dt - today).days
-        except Exception:
-            runway_days = 90
+        runway_days = None
+        if end_date:
+            try:
+                end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+                runway_days = (end_dt - today).days
+            except Exception:
+                runway_days = None
 
-        alloc_pct = min(100, round((hrs / 40.0) * 100)) if role != "Manager" else min(100, round((hrs / 16.0) * 100))
+        cap = standard_capacity(role)
+        alloc_pct = min(100, round((hrs / cap) * 100)) if cap > 0 else 0
 
         if res_name not in resource_map:
             resource_map[res_name] = {
@@ -94,6 +125,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "practice": practice,
                 "skills": practice,
                 "is_ooo": is_ooo,
+                "capacity_hours": cap,
                 "weekly_hours": float(row.get("scheduled_timecard_hours") or 0),
                 "assignments": []
             }
@@ -101,10 +133,11 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             resource_map[res_name]["manager_ldap"] = mgr_ldap
             resource_map[res_name]["manager_name"] = mgr_name
 
-        if row.get("project_id") or hrs > 0:
+        # Only a real, named project counts as an assignment.
+        if has_project:
             resource_map[res_name]["assignments"].append({
-                "project": proj_name,
-                "account": acc_name or "Client Delivery",
+                "project": proj_name or "Cloud Transformation",
+                "account": acc_name or "Unassigned Account",
                 "weekly_hours": hrs,
                 "hours": hrs / 5.0,
                 "start": start_date,
@@ -114,7 +147,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "type": "delivery"
             })
 
-        if (row.get("project_id") or hrs > 0) and acc_name and acc_name != "Strategic Partner":
+        if has_project and acc_name and acc_name != "Strategic Partner":
             if acc_name not in customer_map:
                 customer_map[acc_name] = {
                     "account_name": acc_name,
@@ -131,15 +164,17 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             existing_p = next((p for p in customer_map[acc_name][hub_key] if p["name"] == res_name), None)
             if existing_p:
                 existing_p["hours"] = round(existing_p.get("hours", 0.0) + hrs, 1)
-                # 40 hrs per week standard = 100%
-                existing_p["allocation_pct"] = min(100, max(0, round((existing_p["hours"] / 40.0) * 100)))
+                # "hours" here is a WEEKLY figure, divided by this person's
+                # weekly capacity (16h for managers, 40h otherwise).
+                existing_p["allocation_pct"] = min(100, max(0, round((existing_p["hours"] / cap) * 100))) if cap > 0 else 0
             else:
-                p_pct = min(100, max(0, round((hrs / 40.0) * 100))) if hrs > 0 else 0
+                p_pct = min(100, max(0, round((hrs / cap) * 100))) if hrs > 0 and cap > 0 else 0
                 customer_map[acc_name][hub_key].append({
                     "name": res_name,
                     "ldap": ldap,
                     "role": role,
                     "hours": round(hrs, 1),
+                    "capacity_hours": cap,
                     "allocation_pct": p_pct
                 })
             customer_map[acc_name]["total_hours"] = round(customer_map[acc_name]["total_hours"] + hrs, 1)
@@ -172,17 +207,25 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
     resources_list = list(resource_map.values())
     total_cap = 0.0
     for r in resources_list:
-        std = 16.0 if r["role"] == "Manager" else 40.0
+        std = r.get("capacity_hours") or standard_capacity(r.get("role"))
+        r["capacity_hours"] = std
         total_cap += std
 
         # Resource's weekly delivery hours:
         r_hrs = float(r.get("weekly_hours") or 0.0)
         if r_hrs == 0.0 and r["assignments"]:
-            r_hrs = min(std, sum(a["weekly_hours"] for a in r["assignments"]))
-        r["weekly_hours"] = round(r_hrs, 1)
+            r_hrs = sum(a["weekly_hours"] for a in r["assignments"])
+
+        # Cap at capacity. 82 people were scheduled beyond 100% (max 205%),
+        # which added ~760 phantom hours to the organisation-wide total and
+        # pushed the utilisation KPI above what is actually deliverable.
+        r["scheduled_hours_uncapped"] = round(r_hrs, 1)
+        r["is_over_scheduled"] = r_hrs > std
+        r["weekly_hours"] = round(min(r_hrs, std), 1)
 
         total_scheduled_hrs += r["weekly_hours"]
-        pct = round((r["weekly_hours"] / std) * 100)
+        pct = min(100, round((r["weekly_hours"] / std) * 100)) if std > 0 else 0
+        r["allocation_pct"] = pct
 
         hub_key = "EMEA"
         hubs[hub_key]["people"] += 1
@@ -200,7 +243,8 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             hubs[hub_key]["partial"] += 1
 
     total_scheduled_hrs = round(total_scheduled_hrs, 1)
-    overall_util = round((total_scheduled_hrs / total_cap) * 100, 1) if total_cap > 0 else 60.0
+    # No invented default: if there is no capacity there is no utilisation.
+    overall_util = round((total_scheduled_hrs / total_cap) * 100, 1) if total_cap > 0 else 0.0
 
     # Helper: Map EMEA countries to canonical sub-regions
     def _map_emea_subregion(country: str, sub_reg_raw: str = "") -> str:
@@ -219,8 +263,14 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             dt = datetime.datetime.strptime(str(close_date_str)[:10], "%Y-%m-%d").date()
             diff = (dt - today_date).days
         except Exception:
-            return "8+ Weeks (31d+)", "8+ Weeks", 5
-        
+            return "Unknown Close Date", "Unknown", 6
+
+        # A close date in the past is a slipped deal, not one closing this week.
+        # Previously every negative diff fell through to "1 Week (Next 7d)",
+        # which labelled thousands of past-dated opportunities as imminent.
+        if diff < 0:
+            return "Overdue (past close date)", "Overdue", 0
+
         if diff <= 7:
             return "1 Week (Next 7d)", "1 Week", 1
         elif diff <= 14:
@@ -271,7 +321,12 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
     for p in pipeline_rows:
         val = float(p.get("total_sale_price_usd") or 0.0)
         total_pipeline_val += val
-        acc_name = p.get("account_name") or "Strategic Partner"
+        # "Strategic Partner" was a placeholder for a missing account_name. It
+        # read like a real customer, and it was counted in unique_customers.
+        acc_name = (p.get("account_name") or "").strip()
+        has_named_account = bool(acc_name)
+        if not has_named_account:
+            acc_name = "(Unnamed account)"
         stage_raw = str(p.get("stage_name") or "")
         stage_simp = str(p.get("stage_simplified") or "")
         c_date = str(p.get("close_date") or "")
@@ -335,7 +390,9 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         if is_open:
             open_pipeline_val += val
             open_opportunities_count += 1
-            unique_pipeline_accounts.add(acc_name)
+            # Only count real, named accounts toward the distinct customer KPI.
+            if has_named_account:
+                unique_pipeline_accounts.add(acc_name)
 
             if c_date:
                 try:
@@ -486,13 +543,26 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
 
     customers_list = list(customer_map.values())
 
+    # Never invent revenue. If there is no booked value in the period, say so
+    # rather than displaying a fraction of pipeline as though it were real.
+    # (This previously rendered `total_pipeline_val * 0.25` as PS Engagement.)
     gtm_summary = {
-        "ps_engagement_formatted": f"${(total_booked_val / 1_000_000):.2f}M" if total_booked_val > 0 else f"${(total_pipeline_val * 0.25 / 1_000_000):.2f}M",
-        "pipeline_acv_formatted": f"${(open_pipeline_val / 1_000_000):.2f}M" if open_pipeline_val > 0 else f"${(total_pipeline_val / 1_000_000):.2f}M",
-        "unique_customers": len(unique_pipeline_accounts) or len(customers_list),
+        "ps_engagement_formatted": f"${(total_booked_val / 1_000_000):.2f}M" if total_booked_val > 0 else "—",
+        "pipeline_acv_formatted": f"${(open_pipeline_val / 1_000_000):.2f}M" if open_pipeline_val > 0 else "—",
+        # These count distinct *pipeline* accounts / *open* opportunities. The
+        # previous `or` fallbacks silently substituted a different metric
+        # (delivery customers / all pipeline rows) when the real count was 0.
+        "unique_customers": len(unique_pipeline_accounts),
         "total_workloads": len(workloads),
-        "active_opportunities": open_opportunities_count or len(pipeline_rows)
+        "active_opportunities": open_opportunities_count
     }
+
+    # The single week all delivery figures describe.
+    reporting_week = ""
+    for row in delivery_rows:
+        wk = str(row.get("week_ending") or "")[:10]
+        if wk and wk > reporting_week:
+            reporting_week = wk
 
     return {
         "kpis": {
@@ -516,20 +586,32 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             "workloads": workloads,
             "opportunities": opportunities
         },
-        "raw_data": delivery_rows
+        # Previously "raw_data": delivery_rows shipped ~1,300 raw rows to every
+        # browser purely so the UI could derive one date. Send the date.
+        "reporting_week": reporting_week,
+        "delivery_row_count": len(delivery_rows),
+        "pipeline_row_count": len(pipeline_rows)
     }
 
 def get_fallback_payload(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
-    """Loads pre-fetched live snapshot of BigQuery delivery & pipeline data, dynamically filtered by date range."""
+    """Loads the cached snapshot of BigQuery delivery & pipeline data, filtered by date range.
+
+    IMPORTANT: this is *stale* data. The returned payload is tagged with
+    data_source="cached_snapshot" so the UI can say so out loud.
+    """
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     delivery_file = os.path.join(base_dir, "data", "emea_delivery.json")
     pipeline_file = os.path.join(base_dir, "data", "emea_pipeline.json")
     delivery_rows = []
     pipeline_rows = []
+    snapshot_mtime = None
     if os.path.exists(delivery_file):
         try:
             with open(delivery_file, "r") as f:
                 delivery_rows = json.load(f)
+            snapshot_mtime = datetime.datetime.fromtimestamp(
+                os.path.getmtime(delivery_file)
+            ).strftime("%Y-%m-%d %H:%M")
         except Exception as e:
             logger.error(f"Error loading delivery fallback json: {e}")
     if os.path.exists(pipeline_file):
@@ -539,33 +621,36 @@ def get_fallback_payload(start_date: Optional[str] = None, end_date: Optional[st
         except Exception as e:
             logger.error(f"Error loading pipeline fallback json: {e}")
 
-    # Dynamically filter by date range ONLY IF explicit non-empty date range was provided
+    # Always apply a date window. Previously this whole block was skipped when
+    # no explicit dates were supplied - which is the default page load - so the
+    # snapshot was served completely unfiltered and included opportunities with
+    # close dates as far out as 2035.
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
 
-    if clean_start or clean_end:
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
-        effective_start = clean_start or "2020-01-01"
-        effective_end = clean_end or today_str
+    today = datetime.date.today()
+    # Mirror the defaults used by the live BigQuery queries.
+    effective_start = clean_start or (today - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+    effective_end = clean_end or (today + datetime.timedelta(days=14)).strftime("%Y-%m-%d")
 
-        filtered_delivery = [
-            r for r in delivery_rows
-            if str(r.get("project_start_date") or "2020-01-01")[:10] <= effective_end
-            and (str(r.get("week_ending") or r.get("project_end_date") or "2099-01-01")[:10] >= effective_start)
-        ]
-        delivery_rows = filtered_delivery
+    delivery_rows = [
+        r for r in delivery_rows
+        if str(r.get("project_start_date") or "2020-01-01")[:10] <= effective_end
+        and (str(r.get("week_ending") or r.get("project_end_date") or "2099-01-01")[:10] >= effective_start)
+    ]
 
-        runway_end = (datetime.date.today() + datetime.timedelta(days=90)).strftime("%Y-%m-%d")
-        pipe_max_end = max(effective_end, runway_end)
+    # Pipeline looks further forward than delivery (deals close in the future).
+    pipe_max_end = max(effective_end, (today + datetime.timedelta(days=365)).strftime("%Y-%m-%d"))
+    pipeline_rows = [
+        p for p in pipeline_rows
+        if effective_start <= str(p.get("close_date") or "")[:10] <= pipe_max_end
+    ]
 
-        filtered_pipeline = [
-            p for p in pipeline_rows
-            if str(p.get("close_date") or "")[:10] >= effective_start
-            and str(p.get("close_date") or "")[:10] <= pipe_max_end
-        ]
-        pipeline_rows = filtered_pipeline
-
-    return build_dashboard_payload(delivery_rows, pipeline_rows)
+    payload = build_dashboard_payload(delivery_rows, pipeline_rows)
+    payload["data_source"] = "cached_snapshot"
+    payload["is_stale"] = True
+    payload["snapshot_taken_at"] = snapshot_mtime
+    return payload
 
 @router.get("/dashboard/data")
 @router.get("/data")
@@ -579,10 +664,17 @@ def get_dashboard_data(
     try:
         delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end)
         pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
-        return build_dashboard_payload(delivery_rows, pipeline_rows)
+        payload = build_dashboard_payload(delivery_rows, pipeline_rows)
+        payload["data_source"] = "bigquery"
+        payload["is_stale"] = False
+        return payload
     except Exception as e:
+        # This used to fail silently: the UI kept saying "Live Delivery Pool"
+        # while rendering a stale snapshot. The payload now carries the reason.
         logger.warning(f"BigQuery failed, using fallback data. Error: {e}")
-        return get_fallback_payload(start_date=clean_start, end_date=clean_end)
+        payload = get_fallback_payload(start_date=clean_start, end_date=clean_end)
+        payload["data_source_error"] = str(e)[:300]
+        return payload
 
 @router.post("/refresh-bq")
 def refresh_bq(
@@ -595,10 +687,16 @@ def refresh_bq(
     try:
         delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end)
         pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
-        return {"status": "ok", "data": build_dashboard_payload(delivery_rows, pipeline_rows)}
+        payload = build_dashboard_payload(delivery_rows, pipeline_rows)
+        payload["data_source"] = "bigquery"
+        payload["is_stale"] = False
+        return {"status": "ok", "data": payload}
     except Exception as e:
         logger.warning(f"BigQuery refresh failed: {e}")
-        return {"status": "fallback", "data": get_fallback_payload(start_date=clean_start, end_date=clean_end)}
+        payload = get_fallback_payload(start_date=clean_start, end_date=clean_end)
+        payload["data_source_error"] = str(e)[:300]
+        # status must stay "fallback" so the UI does not claim a successful sync.
+        return {"status": "fallback", "error": str(e)[:300], "data": payload}
 
 @router.get("/users/{ldap}/projects")
 def get_user_projects(
@@ -657,17 +755,37 @@ def agent_chat_endpoint(
 ):
     """Answers user inquiries regarding staffing, workloads, bench, pipeline, and customer accounts."""
     msg = (req.message or "").strip().lower()
-    payload = get_fallback_payload()
+
+    # Previously this ALWAYS read the stale snapshot, so the assistant could
+    # contradict the dashboard the user was looking at. Use the same source.
+    try:
+        delivery_rows = query_emea_delivery_data(bq_client)
+        pipeline_rows = query_emea_pipeline_data(bq_client)
+        payload = build_dashboard_payload(delivery_rows, pipeline_rows)
+        payload["data_source"] = "bigquery"
+    except Exception as e:
+        logger.warning(f"Agent chat: BigQuery failed, using fallback. Error: {e}")
+        payload = get_fallback_payload()
+
     kpis = payload.get("kpis", {})
     resources = payload.get("resources", [])
     customers = payload.get("customerPortfolio", [])
     gtm = payload.get("gtm", {})
 
+    def _alloc_pct(r: Dict[str, Any]) -> float:
+        cap = r.get("capacity_hours") or standard_capacity(r.get("role"))
+        hrs = float(r.get("weekly_hours") or 0)
+        return (hrs / cap) * 100 if cap > 0 else 0.0
+
     # 1. Bench / Availability / Capacity queries
     if any(k in msg for k in ["bench", "available", "free cap", "unassigned", "availability"]):
-        bench_list = [r for r in resources if r.get("weekly_hours", 0) == 0 or not r.get("assignments")]
-        partial_list = [r for r in resources if 0 < r.get("weekly_hours", 0) < 35]
-        
+        # Must match the KPI definitions in build_dashboard_payload exactly:
+        # bench = 0%, fully staffed = >=85%, partial = everything between.
+        # The old rule here was `0 < weekly_hours < 35`, which reported 201
+        # partial engineers while the KPI tile said 183.
+        bench_list = [r for r in resources if float(r.get("weekly_hours") or 0) == 0]
+        partial_list = [r for r in resources if float(r.get("weekly_hours") or 0) > 0 and _alloc_pct(r) < 85]
+
         reply_lines = [
             "### 🛡️ Available Bench & Capacity Overview",
             f"Currently, there are **{len(bench_list)} engineers** with 100% bench capacity, and **{len(partial_list)} engineers** on partial allocation (<85%).",
@@ -687,19 +805,30 @@ def agent_chat_endpoint(
         return {"reply": "\n".join(reply_lines), "actions": actions}
 
     # 2. Individual person lookup (e.g. Yashwant, Rani, etc.)
+    # Matching is deliberately strict: the previous rule matched on any first
+    # name longer than 3 characters appearing anywhere in the message, so a
+    # question like "what is our pipeline in Milan?" could be hijacked by an
+    # engineer called Mila. Require a whole-word match on the full name or ldap.
+    import re as _re
+
+    def _mentions(needle: str) -> bool:
+        if not needle:
+            return False
+        return _re.search(r"(?<![a-z0-9])" + _re.escape(needle) + r"(?![a-z0-9])", msg) is not None
+
     matched_person = None
     for r in resources:
-        r_name = (r.get("name") or "").lower()
-        r_ldap = (r.get("ldap") or "").lower()
-        if (r_name and r_name in msg) or (r_ldap and r_ldap in msg) or (r_name.split()[0] in msg and len(r_name.split()[0]) > 3):
+        r_name = (r.get("name") or "").lower().strip()
+        r_ldap = (r.get("ldap") or "").lower().strip()
+        if _mentions(r_name) or _mentions(r_ldap):
             matched_person = r
             break
 
     if matched_person:
         r = matched_person
         hrs = r.get("weekly_hours", 0)
-        std = 16.0 if r.get("role") == "Manager" else 40.0
-        pct = min(100, round((hrs / std) * 100))
+        std = r.get("capacity_hours") or standard_capacity(r.get("role"))
+        pct = min(100, round((hrs / std) * 100)) if std > 0 else 0
         ass = r.get("assignments", [])
         
         status_str = "🟢 Fully Staffed" if pct >= 85 else ("🟡 Partial Allocation" if pct > 0 else "🔴 100% Bench")
@@ -730,10 +859,10 @@ def agent_chat_endpoint(
         regional = gtm.get("regional_capture", [])
         lines = [
             "### 💼 EMEA GTM & Sales Pipeline Insights",
-            f"* **PS Engagement Value**: **{gtm_summary.get('ps_engagement_formatted', '$24.80M')}**",
-            f"* **Total Pipeline ACV**: **{gtm_summary.get('pipeline_acv_formatted', '$115.40M')}**",
-            f"* **Active Workloads**: **{gtm_summary.get('total_workloads', 120)}** across **{gtm_summary.get('unique_customers', 56)}** accounts",
-            f"* **Live Opportunities**: **{gtm_summary.get('active_opportunities', 48)}** deals in flight",
+            f"* **PS Engagement Value**: **{gtm_summary.get('ps_engagement_formatted') or '—'}**",
+            f"* **Total Pipeline ACV**: **{gtm_summary.get('pipeline_acv_formatted') or '—'}**",
+            f"* **Active Workloads**: **{gtm_summary.get('total_workloads', 0)}** across **{gtm_summary.get('unique_customers', 0)}** accounts",
+            f"* **Live Opportunities**: **{gtm_summary.get('active_opportunities', 0)}** deals in flight",
             "",
             "**Regional Revenue Capture:**"
         ]
@@ -798,7 +927,7 @@ def agent_chat_endpoint(
     # 7. Default smart overview
     lines = [
         "### ✨ EMEA 360 AI Assistant",
-        f"I have analyzed our live EMEA delivery organization (**{len(resources)} engineers**, **{len(customers)} client accounts**, and **{gtm.get('summary', {}).get('total_workloads', 120)} workloads**).",
+        f"I have analyzed our live EMEA delivery organization (**{len(resources)} engineers**, **{len(customers)} client accounts**, and **{gtm.get('summary', {}).get('total_workloads', 0)} workloads**).",
         "",
         "You can ask me questions like:",
         "* *'Who is currently on the bench?'*",

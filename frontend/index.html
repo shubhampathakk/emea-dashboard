@@ -412,9 +412,9 @@
 
         <!-- Right Header Actions -->
         <div class="flex items-center gap-2.5 mt-2 md:mt-0 flex-wrap">
-          <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs" title="Weekly timecards close on Saturdays. 05 Sep 2026 is the latest closed reporting cycle. Current active week closes Saturday, 12 Sep 2026.">
+          <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs" title="Weekly timecards close on Saturdays.">
             <span class="w-2 h-2 rounded-full bg-[#00cea8] animate-pulse"></span>
-            <span>Live Delivery Pool &bull; <strong class="text-white font-semibold" id="header-active-week">Latest Closed Week: 05 Sep 2026</strong></span>
+            <span><span id="data-source-label">Connecting…</span> &bull; <strong class="text-white font-semibold" id="header-active-week">Loading…</strong></span>
           </div>
 
           <button id="btn-sync-bq" onclick="loadData(true)" class="inline-flex items-center gap-1.5 bg-[#151030] hover:bg-[#1f1745] text-[#e2e8f0] hover:text-white border border-[#372f6b] text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-200 shadow-xs hover:shadow-sm cursor-pointer" title="Sync live tables directly from BigQuery">
@@ -589,7 +589,7 @@
         </div>
         <div class="flex items-center justify-between mt-2 pt-1 border-t border-slate-100">
           <span class="text-[11px] text-slate-500 font-medium">Weekly Billable Delivery</span>
-          <span class="text-[10px] font-extrabold text-[#ec008c] bg-[#ec008c]/10 px-1.5 py-0.5 rounded border border-[#ec008c]/20">Live Hours</span>
+          <span id="allocated-hrs-badge" class="text-[10px] font-extrabold text-[#ec008c] bg-[#ec008c]/10 px-1.5 py-0.5 rounded border border-[#ec008c]/20">Scheduled</span>
         </div>
       </div>
 
@@ -626,7 +626,7 @@
                     <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#915EFF]/10 text-[#7c3aed] border border-[#915EFF]/20">Unified Delivery Pool</span>
                   </h3>
                   <p class="text-xs text-slate-500 mt-0.5">
-                    <span id="hub-unified-people" class="font-bold text-slate-800">460</span> Total Delivery Engineers (<span id="hub-unified-allocs" class="font-bold text-slate-800">1,206</span> Allocations)
+                    <span id="hub-unified-people" class="font-bold text-slate-800">—</span> Total Delivery Engineers (<span id="hub-unified-allocs" class="font-bold text-slate-800">—</span> Allocations)
                   </p>
                 </div>
               </div>
@@ -643,7 +643,7 @@
               <div class="flex justify-between items-center text-xs font-semibold text-slate-700 mb-2">
                 <span class="flex items-center gap-2">
                   <span class="font-bold text-slate-900">Total Delivery Utilization</span>
-                  <span class="text-slate-400 font-normal hidden sm:inline">(11,639 of 18,400 Total Available Weekly Capacity Hours)</span>
+                  <span class="text-slate-400 font-normal hidden sm:inline">(<span id="hub-capacity-note">—</span>)</span>
                 </span>
                 <span class="font-bold text-[#915EFF] font-mono text-sm" id="hub-unified-util">63.3%</span>
               </div>
@@ -666,7 +666,7 @@
               </div>
               <div class="bg-[#f12711]/10 border border-[#f12711]/25 rounded-xl p-3.5 shadow-2xs">
                 <div class="text-[10px] font-bold text-[#d8220f] uppercase tracking-wider">Bench &amp; Free</div>
-                <div class="text-2xl font-black text-[#f12711] mt-0.5 font-title" id="hub-unified-bench">98</div>
+                <div class="text-2xl font-black text-[#f12711] mt-0.5 font-title" id="hub-unified-bench">—</div>
                 <div class="text-[10px] text-[#d8220f]/90 mt-0.5">Ready for deployment</div>
               </div>
               <div class="bg-[#915EFF]/10 border border-[#915EFF]/25 rounded-xl p-3.5 shadow-2xs">
@@ -1016,7 +1016,7 @@
               <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
               <span class="text-xs font-bold text-rose-700 uppercase tracking-wider">BENCH &amp; AVAILABLE</span>
             </div>
-            <span class="bg-white border border-[#fecdd3] text-rose-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-bench">4</span>
+            <span class="bg-white border border-[#fecdd3] text-rose-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-bench">—</span>
           </div>
           <div class="flex flex-col gap-3" id="kanban-bench"></div>
         </div>
@@ -1077,14 +1077,16 @@
               <input type="text" id="roster-search" onkeyup="renderRosterTable()" placeholder="Search name, account, skill..." class="w-full bg-slate-50 text-xs border border-slate-200/90 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner">
               <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
-            <select id="roster-filter-lang" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
+            <!-- Language filter is hidden: the backend assigns every resource
+                 the same hardcoded ['English'], so "German"/"Spanish" always
+                 returned zero rows. Restore this once real language data is
+                 available in the source. The element is kept (not deleted) so
+                 renderRosterTable() continues to read a defined "ALL". -->
+            <select id="roster-filter-lang" onchange="renderRosterTable()" class="hidden">
               <option value="ALL">All Languages</option>
-              <option value="English">English</option>
-              <option value="German">German</option>
-              <option value="Spanish">Spanish</option>
             </select>
             <select id="roster-filter-reg" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
-              <option value="ALL">All EMEA Delivery (460)</option>
+              <option value="ALL">All EMEA Delivery</option>
               <option value="EMEA">EMEA Delivery Pool</option>
               <option value="GSD">GSD Delivery Pool</option>
             </select>
@@ -1281,7 +1283,7 @@
                 <div class="text-[9px] text-amber-600 font-bold uppercase tracking-wider">Partial &gt;</div>
               </div>
               <div onclick="openBenchModal()" class="cursor-pointer bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl p-2.5 transition">
-                <div class="text-lg font-black text-rose-700 font-title tracking-tight" id="matrix-emea-bench">98</div>
+                <div class="text-lg font-black text-rose-700 font-title tracking-tight" id="matrix-emea-bench">—</div>
                 <div class="text-[9px] text-rose-600 font-bold uppercase tracking-wider">Bench &gt;</div>
               </div>
             </div>
@@ -1403,7 +1405,7 @@
             <div class="w-7 h-7 rounded-xl bg-purple-50 text-purple-600 font-bold flex items-center justify-center text-xs shadow-2xs">
               $</div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-ps-eng">$146.48M</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-ps-eng">—</div>
           <div class="text-[11px] text-indigo-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6">
@@ -1423,7 +1425,7 @@
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-acv">$420.99M</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-acv">—</div>
           <div class="text-[11px] text-emerald-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6">
@@ -1465,7 +1467,7 @@
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-workloads">5,000</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-workloads">—</div>
           <div class="text-[11px] text-pink-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
@@ -1485,7 +1487,7 @@
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-opps">1,191</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-opps">—</div>
           <div class="text-[11px] text-blue-600 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6">
@@ -1599,7 +1601,7 @@
               regional allocations</p>
           </div>
           <span class="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-xl border border-slate-200">
-            Showing <strong class="text-indigo-600" id="gtm-workload-table-count">5,690</strong> total rows
+            Showing <strong class="text-indigo-600" id="gtm-workload-table-count">—</strong> total rows
           </span>
         </div>
 
@@ -1620,304 +1622,7 @@
             </thead>
             <tbody id="gtm-workload-tbody" class="divide-y divide-slate-100 text-slate-700">
               <tr><td colspan="9" class="p-8 text-center text-slate-400 text-xs">Loading authentic pipeline workloads...</td></tr>
-            </tbody><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Verizon Communications Inc.</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US TMEG</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Dialogflow CX</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M000000g4PJWAY</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-[#fef3c7] text-[#92400e] border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 w-fit">Missing Date</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Narges Asli</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Partner</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Tata Consultancy Services Limited</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2022-09-05</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Verizon&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Verizon Communications Inc.</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US TMEG</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">CCaaS</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000008ta0WAA</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Narges Asli</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Customer</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">TBD</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-08-31</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Verizon&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Verizon Communications Inc.</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US TMEG</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Agent Assist</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000008r3JWAQ</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Narges Asli</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Customer</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Tata Consultancy Services Limited</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-03-31</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Verizon&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Verizon Communications Inc.</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US TMEG</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Vertex AI Search</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000008kNqWAI</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Narges Asli</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Unknown</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Onix Networking Corp.</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-01-25</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Verizon&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Macy's</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">GSD</div>
-            <div class="text-[10px] text-slate-400 font-medium">Retail US</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Agent Assist</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000009mACWAY</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Sunaina Sridhar</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">PSO</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Deloitte Consulting</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$1,200,000</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-09-01</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Macy&#39;s&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Macy's</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">GSD</div>
-            <div class="text-[10px] text-slate-400 font-medium">Retail US</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Customer Experience Agent Studio (CES)</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000009shxWAY</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Sunaina Sridhar</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">PSO</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Deloitte Consulting</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-09-01</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Macy&#39;s&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Lumen Technologies</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US Enterprise</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">CX Insights</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000005lmnWAY</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">In-Flight</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-slate-400 text-[11px]">—</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Partner</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">BCG Platinion</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$850,000</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-11-15</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Lumen&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Sky</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">UK &amp; Ireland</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">CCaaS</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000007kKYWAY</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-slate-400 text-[11px]">—</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">Partner</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Accenture</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$0</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-10-01</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Sky&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr><tr class="hover:bg-slate-50/80 transition">
-          <td class="p-3.5 border-b border-slate-100 font-bold text-slate-900">Comcast Corporation</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">EMEA</div>
-            <div class="text-[10px] text-slate-400 font-medium">US Cable</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-medium text-slate-900 text-xs">Vertex AI Search</div>
-            <a href="https://docs.google.com/spreadsheets/d/1cYFJRxtDqD2eeB-9PBaMDkM0vKuPiTszfS_Y-k6y-Es/edit" target="_blank" class="text-blue-600 font-mono text-[11px] hover:underline">aBJ4M0000005cMCWAY</a>
-          </td>
-          <td class="p-3.5 border-b border-slate-100"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Delivered</span></td>
-          <td class="p-3.5 border-b border-slate-100"><span class="text-purple-700 font-medium text-[10px]">📋 Knox McMurry</span></td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">PSO</div>
-            <div class="text-[10px] text-slate-400 truncate max-w-xs">Google PSO</div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 font-bold text-blue-700">$1,800,000</td>
-          <td class="p-3.5 border-b border-slate-100">
-            <div class="flex items-center gap-1.5 text-slate-600 text-xs">
-              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              <span>2024-07-01</span>
-            </div>
-          </td>
-          <td class="p-3.5 border-b border-slate-100 text-right">
-            <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer(&#39;Comcast&#39;)" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              </button>
-              <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
-            </div>
-          </td>
-        </tr></tbody>
+            </tbody>
           </table>
         </div>
 
@@ -1946,8 +1651,8 @@
                 forecasted FTE staffing demand</p>
             </div>
             <div class="flex items-center gap-2 text-xs">
-              <span class="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-xl border border-indigo-200" id="gtm-total-weighted-acv-badge">Weighted Pipeline: <strong>$61.60M</strong></span>
-              <span class="bg-purple-50 text-purple-700 font-bold px-3 py-1 rounded-xl border border-purple-200" id="gtm-total-demand-fte-badge">Forward Demand: <strong>85.5 FTEs</strong></span>
+              <span class="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-xl border border-indigo-200" id="gtm-total-weighted-acv-badge">Weighted Pipeline: <strong>—</strong></span>
+              <span class="bg-purple-50 text-purple-700 font-bold px-3 py-1 rounded-xl border border-purple-200" id="gtm-total-demand-fte-badge">Forward Demand: <strong>—</strong></span>
             </div>
           </div>
 
@@ -2079,11 +1784,11 @@
       <div class="bg-slate-50/90 p-2.5 px-6 border-b border-slate-200 flex gap-2">
         <button onclick="switchBenchModalTab('bench')" id="modal-subtab-bench" class="py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-[#1a73e8] text-white shadow-sm">
           <span class="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></span>
-          100% Unallocated Bench (4)
+          100% Unallocated Bench
         </button>
         <button onclick="switchBenchModalTab('partial')" id="modal-subtab-partial" class="py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs">
           <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-          Partial Available Capacity (26)
+          Partial Available Capacity
         </button>
       </div>
 
@@ -2493,6 +2198,119 @@
 
 
 
+    // ---------------------------------------------------------------------
+    // Shared calculation helpers.
+    //
+    // These replace logic that was duplicated (and wrong) across tabs:
+    //  * No role in the source data is ever the bare string "Manager" - real
+    //    values look like "Manager (Billable CON/SCE)" or "DC Architect - India".
+    //    Every `r.role === "Manager"` check was therefore dead code.
+    //  * Allocation percentages were frequently uncapped, producing >100%.
+    //  * `new Date("YYYY-MM-DD")` parses as UTC but `parseDateUTC(s)`
+    //    parses as local time, giving off-by-one day counts.
+    // ---------------------------------------------------------------------
+    // Reduced capacity applies to *people managers* who still carry billable
+    // work ("Manager (Billable CON/SCE)"). It must NOT match job families that
+    // merely contain the word manager, e.g. "Technical Account Manager".
+    // This rule is kept identical to standard_capacity() in dashboard_router.py.
+    const MANAGER_WEEKLY_CAPACITY = 16;
+    const STANDARD_WEEKLY_CAPACITY = 40;
+
+    function capacityFor(roleOrResource) {
+      if (roleOrResource && typeof roleOrResource === 'object') {
+        if (roleOrResource.capacity_hours) return roleOrResource.capacity_hours;
+        roleOrResource = roleOrResource.role;
+      }
+      return String(roleOrResource || '').trim().toLowerCase().startsWith('manager')
+        ? MANAGER_WEEKLY_CAPACITY
+        : STANDARD_WEEKLY_CAPACITY;
+    }
+
+    // Weekly hours -> capped 0..100 percentage against that person's capacity.
+    function allocPctOf(weeklyHours, roleOrResource) {
+      const cap = capacityFor(roleOrResource);
+      if (!cap || !isFinite(weeklyHours)) return 0;
+      return Math.max(0, Math.min(100, Math.round((weeklyHours / cap) * 100)));
+    }
+
+    // Parse a YYYY-MM-DD string as a UTC midnight date (no timezone drift).
+    function parseDateUTC(dateStr) {
+      if (!dateStr) return null;
+      const s = String(dateStr).slice(0, 10);
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (!m) return null;
+      const y = parseInt(m[1], 10);
+      if (y < 1990) return null; // epoch-zero junk (1969-12-31 / 1970-01-01)
+      return new Date(Date.UTC(y, parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+    }
+
+    function todayUTC() {
+      const n = new Date();
+      return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+    }
+
+    // Whole days from today until dateStr. Negative = in the past. Null = unknown.
+    function daysUntil(dateStr) {
+      const d = parseDateUTC(dateStr);
+      if (!d) return null;
+      return Math.round((d - todayUTC()) / 86400000);
+    }
+
+    // An assignment is active only if its project has not already ended.
+    function isAssignmentActive(a) {
+      if (!a) return false;
+      const d = daysUntil(a.end);
+      if (d === null) return true; // unknown end date - assume ongoing
+      return d >= 0;
+    }
+
+    // Weekly hours for an assignment, tolerating the daily `hours` field.
+    function assignmentWeeklyHours(a) {
+      if (!a) return 0;
+      if (a.weekly_hours !== undefined && a.weekly_hours !== null) return parseFloat(a.weekly_hours) || 0;
+      return (parseFloat(a.hours) || 0) * 5;
+    }
+
+    // Make the data source unmistakable. The dashboard previously said
+    // "Live Delivery Pool" even when BigQuery had failed and the backend had
+    // silently served a stale cached snapshot.
+    function renderDataSourceBanner(data) {
+      const isLive = data && data.data_source === "bigquery";
+      const label = document.getElementById("data-source-label");
+      const dot = document.getElementById("live-week-dot");
+
+      if (label) label.textContent = isLive ? "Live Delivery Pool" : "CACHED DATA \u2014 not live";
+      if (dot) dot.style.background = isLive ? "#00cea8" : "#f59e0b";
+
+      // The headline hours figure describes exactly one week. Name that week
+      // rather than asserting the data is "live".
+      const hrsBadge = document.getElementById("allocated-hrs-badge");
+      if (hrsBadge) {
+        hrsBadge.textContent = (data && data.reporting_week)
+          ? `Week of ${formatRosterDate(data.reporting_week)}`
+          : "Scheduled";
+      }
+
+      let banner = document.getElementById("stale-data-banner");
+      if (isLive) {
+        if (banner) banner.remove();
+        return;
+      }
+
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "stale-data-banner";
+        banner.className = "w-full bg-amber-50 border-b-2 border-amber-400 text-amber-900 px-4 py-2.5 text-xs font-semibold flex items-center gap-2 sticky top-0 z-50";
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
+      const taken = (data && data.snapshot_taken_at) ? ` Snapshot taken ${data.snapshot_taken_at}.` : "";
+      const why = (data && data.data_source_error) ? ` Reason: ${data.data_source_error}` : "";
+      banner.innerHTML =
+        `<span>\u26A0\uFE0F</span><span>You are viewing <strong>cached data, not live BigQuery</strong>.` +
+        `${taken} Sign in again to refresh.${why}</span>`;
+    }
+
+
     function sanitizeLdap(ldap, email, fallback = '') {
       let val = (ldap || email || '').trim();
       if (val.includes(':')) val = val.split(':').pop().trim();
@@ -2551,7 +2369,11 @@
         }
 
         let res;
-        const token = window.bqAccessToken || localStorage.getItem("google_oauth_token") || localStorage.getItem("bq_access_token") || sessionStorage.getItem("google_oauth_token");
+        // Only send a token we know has not expired; an expired token makes
+        // the backend fall back to cached data.
+        const token = (typeof window.getValidToken === 'function')
+          ? window.getValidToken()
+          : window.bqAccessToken;
         const headers = { "Content-Type": "application/json" };
         if (token) {
           headers["X-User-OAuth-Token"] = token;
@@ -2567,24 +2389,35 @@
           res = await fetch('/api/refresh-bq' + qs, { method: 'POST', headers });
           const json = await res.json();
           globalData = json.data || json;
-          showToast("✅ BigQuery Synced: Live operating pool updated!", "success");
+          // Only claim success if the backend actually reached BigQuery. This
+          // previously showed a green success toast unconditionally, even when
+          // the request had silently fallen back to the cached snapshot.
+          if (json.status === "ok" && globalData.data_source === "bigquery") {
+            showToast("✅ BigQuery synced: live delivery pool updated.", "success");
+          } else {
+            showToast("⚠️ BigQuery sync failed — showing cached data. " + (json.error || ""), "error");
+          }
         } else {
           res = await fetch('/api/data' + qs, { headers });
           globalData = await res.json();
         }
 
-        // Dynamically update header active week badge from raw data if present
-        let latestWeek = "";
-        (globalData.raw_data || []).forEach(row => {
-          if (row.week_ending && (!latestWeek || row.week_ending > latestWeek)) {
-            latestWeek = row.week_ending;
-          }
-        });
+        renderDataSourceBanner(globalData);
+
+        // Header active week now comes from a single scalar the backend
+        // computes, instead of shipping ~1,300 raw rows to every browser.
+        const latestWeek = globalData.reporting_week || "";
         const headerActiveWeekEl = document.getElementById("header-active-week");
-        if (headerActiveWeekEl && latestWeek) {
-          headerActiveWeekEl.textContent = `Latest Closed Week: ${formatRosterDate(latestWeek)}`;
+        if (headerActiveWeekEl) {
+          headerActiveWeekEl.textContent = latestWeek
+            ? `Week Ending: ${formatRosterDate(latestWeek)}`
+            : "Week unavailable";
           const badgeEl = document.getElementById("live-week-badge");
-          if (badgeEl) badgeEl.title = `Weekly timecards close on Saturdays. Most recent closed cycle: ${formatRosterDate(latestWeek)}. Current active week ends Saturday, 12 Sep 2026.`;
+          if (badgeEl) {
+            badgeEl.title = latestWeek
+              ? `All delivery figures describe the week ending ${formatRosterDate(latestWeek)}. Weekly timecards close on Saturdays.`
+              : "Reporting week unavailable.";
+          }
         }
 
         // Sanitize LDAP on all resources & customer portfolio to guarantee no raw emails (e.g. shubhampathakk@google.com -> shubhampathakk)
@@ -2686,10 +2519,6 @@
       renderModalBenchCards();
     }
 
-    function filterModalBench() {
-      renderModalBenchCards();
-    }
-
     function renderModalBenchCards() {
       const container = document.getElementById("modal-bench-cards-list");
       if (!container) return;
@@ -2707,7 +2536,7 @@
           rHours += wh;
           if (a.project) projNames.push(a.project);
         });
-        const allocPct = Math.round((rHours / 40.0) * 100);
+        const allocPct = allocPctOf(rHours, r);
 
         if (currentBenchModalTab === 'bench') {
           if (rHours === 0 || allocPct === 0) {
@@ -2966,13 +2795,12 @@
       let oooCount = 0;
 
       const hubs = {
-        EMEA: { people: 0, allocs: 0, hours: 0, staffed: 0, partial: 0, bench: 0 },
-        GSD: { people: 0, allocs: 0, hours: 0, staffed: 0, partial: 0, bench: 0 }
+        EMEA: { people: 0, allocs: 0, hours: 0, cap: 0, staffed: 0, partial: 0, bench: 0 },
+        GSD: { people: 0, allocs: 0, hours: 0, cap: 0, staffed: 0, partial: 0, bench: 0 }
       };
 
       resources.forEach(r => {
-        const isManager = (r.role === "Manager");
-        const stdCap = isManager ? 16.0 : 40.0;
+        const stdCap = capacityFor(r);
         let rDeliveryHours = 0;
         let deliveryAllocsCount = 0;
 
@@ -2993,7 +2821,7 @@
           ? Number(r.weekly_hours)
           : Math.min(stdCap, rDeliveryHours);
 
-        let effPct = Math.round((effHrs / stdCap) * 100);
+        let effPct = allocPctOf(effHrs, r);
 
         totalHrs += effHrs;
         totalCap += stdCap;
@@ -3020,6 +2848,7 @@
         hubs[hubKey].people++;
         hubs[hubKey].allocs += deliveryAllocsCount;
         hubs[hubKey].hours += effHrs;
+        hubs[hubKey].cap += stdCap;
         if (isBench) hubs[hubKey].bench++;
         else if (isPartial) hubs[hubKey].partial++;
         else hubs[hubKey].staffed++;
@@ -3077,10 +2906,14 @@
       if (document.getElementById("hub-unified-hours")) document.getElementById("hub-unified-hours").textContent = `${Math.round(totalHrs).toLocaleString()}h`;
       if (document.getElementById("hub-unified-util")) document.getElementById("hub-unified-util").textContent = `${overallUtilPct}%`;
       if (document.getElementById("hub-unified-bar")) document.getElementById("hub-unified-bar").style.width = `${overallUtilPct}%`;
+      if (document.getElementById("hub-capacity-note")) {
+        document.getElementById("hub-capacity-note").textContent =
+          `${Math.round(totalHrs).toLocaleString()} of ${Math.round(totalCap).toLocaleString()} Total Available Weekly Capacity Hours`;
+      }
 
       // EMEA Field Hub
       const emeaPeople = hubs.EMEA.people;
-      const emeaCap = emeaPeople * 40.0;
+      const emeaCap = hubs.EMEA.cap;
       const emeaUtil = emeaCap > 0 ? Math.min(100, Math.round((hubs.EMEA.hours / emeaCap) * 100)) : 0;
       animateCounter("hub-emea-people", emeaPeople);
       animateCounter("hub-emea-allocs", hubs.EMEA.allocs);
@@ -3093,7 +2926,7 @@
 
       // GSD Hub
       const gsdPeople = hubs.GSD.people;
-      const gsdCap = gsdPeople * 40.0;
+      const gsdCap = hubs.GSD.cap;
       const gsdUtil = gsdCap > 0 ? Math.min(100, Math.round((hubs.GSD.hours / gsdCap) * 100)) : 0;
       animateCounter("hub-gsd-people", gsdPeople);
       animateCounter("hub-gsd-allocs", hubs.GSD.allocs);
@@ -3332,8 +3165,7 @@
           if (rd === undefined || rd === null) {
             if (a.end) {
               try {
-                const endDate = new Date(a.end + "T00:00:00");
-                rd = Math.ceil((endDate - baseDate) / (1000 * 60 * 60 * 24));
+                rd = daysUntil(a.end);
               } catch(e) { rd = 999; }
             }
           }
@@ -3351,7 +3183,7 @@
           if (!matchName && !matchLdap && !matchSkills && !matchRegion && !matchProj) return;
         }
 
-        const standard = r.role === "Manager" ? 16 : 40;
+        const standard = capacityFor(r);
         let totalHrs = (r.weekly_hours !== undefined && r.weekly_hours !== null)
           ? Number(r.weekly_hours)
           : Math.min(standard, assignments.reduce((acc, a) => acc + (a.weekly_hours || (a.hours || 0) * 5), 0));
@@ -3562,19 +3394,22 @@
 
             allDelivery.push(a);
 
-            activeDelivery.push(a);
+            // "Active" must mean still running. This previously pushed every
+            // assignment unconditionally, so finished projects were counted as
+            // current work and inflated each person's allocation.
+            if (isAssignmentActive(a)) activeDelivery.push(a);
           });
 
-          const isManager = (r.role === "Manager");
-          const stdCap = isManager ? 16.0 : 40.0;
-          const halfCap = isManager ? 8.0 : 20.0;
+          const stdCap = capacityFor(r);
+          const halfCap = stdCap / 2;
 
           // Compute Person's Total Combined ACTIVE Delivery Hours
           let personTotalDeliveryHrs = (r.weekly_hours !== undefined && r.weekly_hours !== null)
             ? Number(r.weekly_hours)
-            : Math.min(stdCap, activeDelivery.reduce((acc, a) => acc + (a.weekly_hours !== undefined ? a.weekly_hours : (a.hours || 0) * 5), 0));
+            : activeDelivery.reduce((acc, a) => acc + assignmentWeeklyHours(a), 0);
+          personTotalDeliveryHrs = Math.min(stdCap, personTotalDeliveryHrs);
 
-          let personRawPct = (personTotalDeliveryHrs / stdCap) * 100;
+          let personRawPct = stdCap > 0 ? (personTotalDeliveryHrs / stdCap) * 100 : 0;
           let personEffPct = Math.min(100, Math.round(personRawPct));
           let personEffHrs = personTotalDeliveryHrs;
 
@@ -3585,7 +3420,7 @@
 
           const hasOverdue = (activeDelivery.length > 0) && activeDelivery.some(a => {
             if (!a.end) return false;
-            try { return new Date(a.end + "T00:00:00") < baseDate; } catch(e) { return false; }
+            try { return (daysUntil(a.end) !== null && daysUntil(a.end) < 0); } catch(e) { return false; }
           });
 
           if (riskF === "Staffed" && !isPersonStaffed) return;
@@ -3605,7 +3440,7 @@
           if (riskF === "Overdue") {
             const overdueRows = activeDelivery.filter(a => {
               if (!a.end) return false;
-              try { return new Date(a.end + "T00:00:00") < baseDate; } catch(e) { return false; }
+              try { return (daysUntil(a.end) !== null && daysUntil(a.end) < 0); } catch(e) { return false; }
             });
             if (overdueRows.length > 0) rowsToShow = overdueRows;
           }
@@ -3636,8 +3471,8 @@
               runwayDays = a.runway_days;
             } else if (a.end) {
               try {
-                const endDate = new Date(a.end + "T00:00:00");
-                runwayDays = Math.ceil((endDate - baseDate) / (1000 * 60 * 60 * 24));
+                const _d = daysUntil(a.end);
+                runwayDays = (_d === null) ? 999 : _d;
               } catch (e) {
                 runwayDays = 999;
               }
@@ -3817,7 +3652,7 @@
             let pct = p.allocation_pct;
             if (pct === undefined || pct === null) {
               if (p.hours !== undefined && p.hours !== null && p.hours > 0) {
-                pct = Math.min(100, Math.round((p.hours / 40.0) * 100));
+                pct = allocPctOf(p.hours, p.capacity_hours ? p : (p.role || ""));
               } else {
                 const res = (globalData.resources || []).find(r => r.name === p.name || (p.ldap && r.ldap === p.ldap));
                 if (res) {
@@ -3827,15 +3662,15 @@
                   );
                   if (accAss.length > 0) {
                     const custHrs = accAss.reduce((sum, a) => sum + (parseFloat(a.weekly_hours) || 0), 0);
-                    pct = Math.min(100, Math.round((custHrs / 40.0) * 100));
+                    pct = allocPctOf(custHrs, res);
                   } else if (res.weekly_hours > 0) {
-                    pct = Math.min(100, Math.round((res.weekly_hours / 40.0) * 100));
+                    pct = allocPctOf(res.weekly_hours, res);
                   }
                 }
               }
             }
             if (pct === undefined || pct === null || isNaN(pct)) {
-              pct = (p.hours ? Math.round((p.hours / 40.0) * 100) : 0);
+              pct = (p.hours ? allocPctOf(p.hours, p.capacity_hours ? p : (p.role || "")) : 0);
             }
             pct = Math.max(0, Math.min(100, Math.round(pct)));
             peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition">${p.name} <span class="text-[10px] text-indigo-600 font-bold">(${pct}%)</span></span>`;
@@ -3972,12 +3807,12 @@
         if (deliveryAssignments.length > 0) countDelivery++;
         if (presalesAssignments.length > 0) countPresales++;
 
-        const isManager = (r.role === "Manager");
-        const stdCap = isManager ? 16.0 : 40.0;
+        const stdCap = capacityFor(r);
 
         let regionBadge = `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-md">${r.region || 'EMEA'}</span>`;
         if (r.region === "EMEA") regionBadge = `<span class="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span>`;
-        if (r.region === "GSD") regionBadge = `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md">GSD</span>`;
+        const rIsGsd = (r.hub === "GSD" || r.region === "GSD" || (r.cost_center_name || "").includes("GSD") || (r.role || "").includes("DC"));
+        if (rIsGsd) regionBadge = `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md">GSD</span>`;
 
         // ==========================================
         // MODE A: CLIENT DELIVERY ROLL-OFF TIMELINE
@@ -4000,8 +3835,7 @@
             if (rd === undefined || rd === null) {
               if (a.end) {
                 try {
-                  const endDate = new Date(a.end + "T00:00:00");
-                  rd = Math.ceil((endDate - baseDate) / (1000 * 60 * 60 * 24));
+                  rd = daysUntil(a.end);
                 } catch(e) { rd = 999; }
               }
             }
@@ -4025,8 +3859,8 @@
             if (runwayDays === undefined || runwayDays === null) {
               if (a.end) {
                 try {
-                  const endDate = new Date(a.end + "T00:00:00");
-                  runwayDays = Math.ceil((endDate - baseDate) / (1000 * 60 * 60 * 24));
+                  const _d = daysUntil(a.end);
+                  runwayDays = (_d === null) ? 999 : _d;
                 } catch(e) { runwayDays = 999; }
               } else {
                 runwayDays = 999;
@@ -4040,8 +3874,8 @@
             let progressPct = 50;
             if (a.start && a.end) {
               try {
-                const sDate = new Date(a.start + "T00:00:00");
-                const eDate = new Date(a.end + "T00:00:00");
+                const sDate = parseDateUTC(a.start);
+                const eDate = parseDateUTC(a.end);
                 const totalDur = eDate - sDate;
                 if (totalDur > 0) {
                   const elapsed = baseDate - sDate;
@@ -4303,7 +4137,6 @@
 
     function renderExecSpotlight() {
       const resources = globalData.resources || [];
-      const baseDate = new Date();
       const rollingOffList = [];
 
       resources.forEach(r => {
@@ -4312,67 +4145,45 @@
           const p = (a.project || "").toLowerCase();
           if (p.includes("presales") || p.includes("training") || p.includes("onboarding") || p.includes("bench") || p.includes("unassigned")) return;
 
+          // Runway must be KNOWN. Previously an unknown end date defaulted to
+          // 90 days, and daysUntil() returning null silently coerced to 0 in
+          // the >= 0 comparison, flagging unknown-date work as "rolling off
+          // today". Unknown runway is excluded instead.
           let rd = a.runway_days;
-          if (rd === undefined || rd === null) {
-            if (a.end) {
-              try {
-                const endD = new Date(a.end + "T00:00:00");
-                rd = Math.ceil((endD - baseDate) / (1000 * 60 * 60 * 24));
-              } catch(e) { rd = 90; }
-            } else {
-              rd = 90;
-            }
-          }
+          if (rd === undefined || rd === null) rd = daysUntil(a.end);
+          if (rd === undefined || rd === null || isNaN(rd)) return;
 
           if (rd >= 0 && rd <= 7) {
             rollingOffList.push({
               resource: r,
               assignment: a,
               runway_days: rd,
-              weekly_hours: a.weekly_hours || 40,
-              allocation_pct: a.allocation_pct || 100
+              weekly_hours: assignmentWeeklyHours(a),
+              allocation_pct: (a.allocation_pct === undefined || a.allocation_pct === null) ? null : a.allocation_pct
             });
           }
         });
       });
 
-      let candidateList = rollingOffList;
-      if (candidateList.length < 4) {
-        const allAss = [];
-        resources.forEach(r => {
-          (r.assignments || []).forEach(a => {
-            const p = (a.project || "").toLowerCase();
-            if (p.includes("presales") || p.includes("training") || p.includes("onboarding") || p.includes("bench") || p.includes("unassigned")) return;
-            let rd = a.runway_days;
-            if (rd === undefined || rd === null) {
-              if (a.end) {
-                try {
-                  const endD = new Date(a.end + "T00:00:00");
-                  rd = Math.ceil((endD - baseDate) / (1000 * 60 * 60 * 24));
-                } catch(e) { rd = 90; }
-              } else {
-                rd = 90;
-              }
-            }
-            if (rd < 0) return;
-            allAss.push({
-              resource: r,
-              assignment: a,
-              runway_days: rd,
-              weekly_hours: a.weekly_hours || 40,
-              allocation_pct: a.allocation_pct || 100
-            });
-          });
-        });
-        allAss.sort((x, y) => x.runway_days - y.runway_days);
-        candidateList = allAss.slice(0, 4);
-      } else {
-        candidateList.sort((x, y) => x.runway_days - y.runway_days);
-      }
+      // No padding. If nobody is genuinely rolling off in the next 7 days the
+      // panel says zero rather than back-filling with unrelated assignments
+      // under a "0-7d left" heading.
+      const candidateList = rollingOffList;
+      candidateList.sort((x, y) => x.runway_days - y.runway_days);
 
       const spotlightMap = new Map();
       let totalSpotlightHrs = 0;
       let totalSpotlightProjects = 0;
+
+      // Headline totals must cover EVERY person rolling off, not just the
+      // four rendered as cards. And "Resources" means people, not assignment
+      // rows - rollingOffList holds one entry per assignment.
+      const rollingOffPeople = new Set();
+      candidateList.forEach(item => {
+        rollingOffPeople.add(item.resource.ldap || item.resource.name);
+        totalSpotlightHrs += item.weekly_hours;
+        totalSpotlightProjects++;
+      });
 
       candidateList.forEach(item => {
         const rName = item.resource.name;
@@ -4388,14 +4199,12 @@
           const entry = spotlightMap.get(rName);
           entry.assignments.push(item);
           entry.totalHrs += item.weekly_hours;
-          totalSpotlightHrs += item.weekly_hours;
-          totalSpotlightProjects++;
           if (item.runway_days < entry.minRunway) entry.minRunway = item.runway_days;
         }
       });
 
-      const uniqueSpotlightPeople = spotlightMap.size;
-      const totalWeekResources = rollingOffList.length || uniqueSpotlightPeople;
+      const uniqueSpotlightPeople = rollingOffPeople.size;
+      const totalWeekResources = uniqueSpotlightPeople;
 
       if (document.getElementById("exec-curr-week-badge")) {
         document.getElementById("exec-curr-week-badge").textContent = `${totalWeekResources} Current Week Resources`;
@@ -4454,20 +4263,24 @@
         let projectsHtml = "";
         data.assignments.forEach(item => {
           const a = item.assignment;
+          const allocLabel = (item.allocation_pct === null || item.allocation_pct === undefined)
+            ? "—"
+            : `${item.allocation_pct}%`;
           projectsHtml += `
             <div class="bg-slate-50/70 border border-slate-100/90 rounded-xl p-2.5 text-xs hover:bg-slate-100/60 transition">
               <div class="flex justify-between items-start gap-2">
                 <span class="font-bold text-slate-800 truncate" title="${a.project}">${a.project}</span>
-                <span class="font-mono font-bold text-blue-600 shrink-0">${item.allocation_pct}% <span class="text-[10px] text-slate-400 font-normal">(${Math.round(item.weekly_hours)}h)</span></span>
+                <span class="font-mono font-bold text-blue-600 shrink-0">${allocLabel} <span class="text-[10px] text-slate-400 font-normal">(${Math.round(item.weekly_hours)}h)</span></span>
               </div>
               <div class="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
-                <span>End Date: <strong class="text-slate-700 font-mono">${a.end || 'Current Week'}</strong></span>
+                <span>End Date: <strong class="text-slate-700 font-mono">${a.end || '—'}</strong></span>
               </div>
             </div>
           `;
         });
 
-        const practiceName = r.practice || r.skills || "Cloud Delivery";
+        const practiceName = r.practice || r.skills || "—";
+
 
         grid.innerHTML += `
           <div class="glass-card bg-white/95 border border-slate-200/80 hover:border-blue-300 rounded-2xl p-4 flex flex-col gap-3 shadow-2xs hover:shadow-xs transition duration-200 group">
@@ -4615,17 +4428,13 @@
           const p = (a.project || "").toLowerCase();
           if (p.includes("presales") || p.includes("training") || p.includes("onboarding") || p.includes("bench") || p.includes("unassigned")) return;
           
+          // Unknown runway is excluded rather than assumed to be 90 days.
+          // daysUntil() returns null for an unparseable/absent date, and
+          // `null < 0` is false, so an unknown date used to fall through into
+          // the "Ends Today" bucket.
           let rd = a.runway_days;
-          if (rd === undefined || rd === null) {
-            if (a.end) {
-              try {
-                const endD = new Date(a.end + "T00:00:00");
-                rd = Math.ceil((endD - baseDate) / (1000 * 60 * 60 * 24));
-              } catch(e) { rd = 90; }
-            } else {
-              rd = 90;
-            }
-          }
+          if (rd === undefined || rd === null) rd = daysUntil(a.end);
+          if (rd === undefined || rd === null || isNaN(rd)) return;
 
           if (rd < 0) return;
 
@@ -4645,15 +4454,17 @@
             ldap: r.ldap,
             region: isGsd ? "GSD" : "EMEA",
             hub: isGsd ? "GSD" : "EMEA",
-            role: r.role || "Consultant",
+            role: r.role || "—",
             isOOO: Boolean(r.is_ooo),
             tag: tag,
             tagClass: tagClass,
-            project: a.project || "Customer Project",
-            allocPct: a.allocation_pct || (r.role === "Manager" ? Math.min(100, Math.round(((a.weekly_hours || 16) / 16) * 100)) : Math.min(100, Math.round(((a.weekly_hours || 40) / 40) * 100))),
-            hrs: Math.round(a.weekly_hours || 40),
-            endDate: a.end || "2026-12-31",
-            skills: r.skills || r.practice || "Cloud Delivery",
+            project: a.project || "—",
+            allocPct: (a.allocation_pct !== undefined && a.allocation_pct !== null)
+              ? Math.max(0, Math.min(100, Math.round(a.allocation_pct)))
+              : allocPctOf(assignmentWeeklyHours(a), r),
+            hrs: Math.round(assignmentWeeklyHours(a)),
+            endDate: a.end || "—",
+            skills: r.skills || r.practice || "—",
             runway_days: rd
           });
         });
@@ -4823,20 +4634,21 @@
       const summary = gtm.summary || {};
 
       // 1. Top 5 KPIs
+      const gtmNum = (v) => (v === null || v === undefined || v === "") ? "—" : v;
       if (document.getElementById("kpi-gtm-ps-eng")) {
-        document.getElementById("kpi-gtm-ps-eng").textContent = summary.ps_engagement_formatted || "$19.62M";
+        document.getElementById("kpi-gtm-ps-eng").textContent = gtmNum(summary.ps_engagement_formatted);
       }
       if (document.getElementById("kpi-gtm-acv")) {
-        document.getElementById("kpi-gtm-acv").textContent = summary.pipeline_acv_formatted || "$215.40M";
+        document.getElementById("kpi-gtm-acv").textContent = gtmNum(summary.pipeline_acv_formatted);
       }
       if (document.getElementById("kpi-gtm-customers")) {
-        document.getElementById("kpi-gtm-customers").textContent = summary.unique_customers || 185;
+        document.getElementById("kpi-gtm-customers").textContent = gtmNum(summary.unique_customers);
       }
       if (document.getElementById("kpi-gtm-workloads")) {
-        document.getElementById("kpi-gtm-workloads").textContent = summary.total_workloads || 320;
+        document.getElementById("kpi-gtm-workloads").textContent = gtmNum(summary.total_workloads);
       }
       if (document.getElementById("kpi-gtm-opps")) {
-        document.getElementById("kpi-gtm-opps").textContent = summary.active_opportunities || 48;
+        document.getElementById("kpi-gtm-opps").textContent = gtmNum(summary.active_opportunities);
       }
 
       // 2. Regional Financial Capture Card (Globe)
@@ -4923,10 +4735,14 @@
 
       const buckets = demandTimeline.buckets || [];
       if (document.getElementById("gtm-total-weighted-acv-badge")) {
-        document.getElementById("gtm-total-weighted-acv-badge").innerHTML = `Weighted Pipeline: <strong>${demandTimeline.total_forward_weighted_acv || '$17.47M'}</strong>`;
+        const wtd = demandTimeline.total_forward_weighted_acv;
+        document.getElementById("gtm-total-weighted-acv-badge").innerHTML = `Weighted Pipeline: <strong>${(wtd === null || wtd === undefined || wtd === "") ? "—" : wtd}</strong>`;
       }
       if (document.getElementById("gtm-total-demand-fte-badge")) {
-        document.getElementById("gtm-total-demand-fte-badge").innerHTML = `Forward Demand: <strong>${demandTimeline.total_forward_demand_fte || 28.9} FTEs</strong>`;
+        const dfte = demandTimeline.total_forward_demand_fte;
+        document.getElementById("gtm-total-demand-fte-badge").innerHTML = (dfte === null || dfte === undefined)
+          ? `Forward Demand: <strong>—</strong>`
+          : `Forward Demand: <strong>${dfte} FTEs</strong>`;
       }
 
       buckets.forEach(b => {
@@ -5279,27 +5095,34 @@
     // Soft-Booking Modal Logic
     function openSoftBookModal(oppId, accName, reqResources, horizon) {
       const allRes = globalData.resources || [];
-      const benchEngineers = allRes.filter(r => {
-        const totalHrs = (r.assignments || []).reduce((acc, a) => acc + (a.weekly_hours !== undefined ? a.weekly_hours : ((a.hours || 0) * 5)), 0);
-        return totalHrs === 0;
-      }).slice(0, 10).map(r => ({
-        name: r.name,
-        ldap: r.ldap,
-        role: r.practice || r.role || "Specialist",
-        status: "Bench Available",
-        hub: r.region || "EMEA"
-      }));
-      if (benchEngineers.length === 0) {
-        allRes.slice(0, 5).forEach(r => {
-          benchEngineers.push({
+
+      // Candidate = anyone with genuinely unused weekly capacity THIS week.
+      // Use the person-level scheduled hours (weekly_hours), not a re-sum of
+      // delivery assignments: a person can carry scheduled hours with no
+      // delivery assignment row, and would otherwise look 100% free.
+      const candidates = allRes
+        .filter(r => !r.is_ooo)
+        .map(r => {
+          const cap = capacityFor(r);
+          const booked = Math.min(Number(r.weekly_hours) || 0, cap);
+          return {
             name: r.name,
             ldap: r.ldap,
             role: r.practice || r.role || "Specialist",
-            status: "Available for Soft-Booking",
-            hub: r.region || "EMEA"
-          });
-        });
-      }
+            freeHrs: Math.max(0, Math.round((cap - booked) * 10) / 10),
+            allocPct: allocPctOf(booked, r),
+            hub: r.hub || r.region || "EMEA"
+          };
+        })
+        .filter(c => c.freeHrs > 0)
+        .sort((a, b) => b.freeHrs - a.freeHrs);
+
+      const benchEngineers = candidates.slice(0, 25).map(c => ({
+        ...c,
+        status: c.allocPct === 0
+          ? `Bench • ${c.freeHrs}h free`
+          : `${c.allocPct}% allocated • ${c.freeHrs}h free`
+      }));
 
       const modalHtml = `
         <div id="softbook-modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -5318,7 +5141,9 @@
             <div class="flex flex-col gap-2">
               <label class="text-xs font-bold text-slate-700">Select Available Resource to Soft-Book:</label>
               <select id="softbook-resource-select" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800">
-                ${benchEngineers.map(e => `<option value="${e.ldap}">${e.name} (${e.ldap}) &bull; ${e.role} [${e.status}]</option>`).join('')}
+                ${benchEngineers.length
+                  ? benchEngineers.map(e => `<option value="${e.ldap}">${e.name} (${e.ldap}) &bull; ${e.role} [${e.status}]</option>`).join('')
+                  : `<option value="">No one has free capacity this week</option>`}
               </select>
             </div>
 
@@ -5939,14 +5764,75 @@ Thank you!
     if (overlay) overlay.style.display = "none";
   }
 
-  // Check if we already have a cached token
-  const cachedToken = localStorage.getItem("google_oauth_token") || localStorage.getItem("bq_access_token") || sessionStorage.getItem("google_oauth_token");
+  function showLoginOverlay(msg) {
+    const overlay = document.getElementById("login-overlay");
+    if (overlay) overlay.style.display = "";
+    const statusEl = document.getElementById("login-status");
+    if (statusEl && msg) statusEl.innerText = msg;
+  }
+
+  // Google OAuth access tokens are valid for roughly one hour.
+  //
+  // Previously the token was cached in localStorage with NO expiry check, so
+  // every visit after that hour sent a dead token: BigQuery returned 401, the
+  // backend silently fell back to a stale snapshot, and the UI still claimed
+  // "Live Delivery Pool". Persist the expiry and refuse to use stale tokens.
+  const TOKEN_KEY = "google_oauth_token";
+  const TOKEN_EXPIRY_KEY = "google_oauth_token_expiry";
+  // Refresh a minute early to avoid racing the expiry.
+  const TOKEN_SKEW_MS = 60 * 1000;
+
+  function storeToken(token, expiresInSeconds) {
+    const ttl = (expiresInSeconds ? Number(expiresInSeconds) : 3600) * 1000;
+    const expiry = Date.now() + ttl;
+    window.bqAccessToken = token;
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(TOKEN_EXPIRY_KEY, String(expiry));
+      // Legacy key kept for backwards compatibility with older sessions.
+      localStorage.setItem("bq_access_token", token);
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } catch (e) { /* storage may be unavailable */ }
+  }
+
+  function clearToken() {
+    window.bqAccessToken = null;
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_EXPIRY_KEY);
+      localStorage.removeItem("bq_access_token");
+      sessionStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  function getValidToken() {
+    let token, expiry;
+    try {
+      token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem("bq_access_token") || sessionStorage.getItem(TOKEN_KEY);
+      expiry = parseInt(localStorage.getItem(TOKEN_EXPIRY_KEY) || "0", 10);
+    } catch (e) {
+      return null;
+    }
+    if (!token) return null;
+    // No recorded expiry means it was stored by the old build - treat as stale.
+    if (!expiry || Date.now() + TOKEN_SKEW_MS >= expiry) {
+      clearToken();
+      return null;
+    }
+    return token;
+  }
+  window.getValidToken = getValidToken;
+  window.clearBqToken = clearToken;
+
+  const cachedToken = getValidToken();
   if (cachedToken) {
     window.bqAccessToken = cachedToken;
     hideLoginOverlay();
     if (typeof window.loadData === 'function') {
       window.loadData();
     }
+  } else {
+    showLoginOverlay("Your BigQuery session has expired. Please sign in again to load live data.");
   }
 
   const loginBtn = document.getElementById("login-btn");
@@ -5958,10 +5844,8 @@ Thank you!
         const credential = GoogleAuthProvider.credentialFromResult(result);
         const token = credential?.accessToken;
         if (token) {
-          window.bqAccessToken = token;
-          localStorage.setItem("google_oauth_token", token);
-          sessionStorage.setItem("google_oauth_token", token);
-          localStorage.setItem("bq_access_token", token);
+          // Record the expiry so the token is not reused after it dies.
+          storeToken(token, result?._tokenResponse?.oauthExpireIn);
         }
         hideLoginOverlay();
         if (typeof window.loadData === 'function') {

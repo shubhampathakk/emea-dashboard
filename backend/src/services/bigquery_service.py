@@ -78,7 +78,23 @@ def query_emea_delivery_data(
         start_date = str(start_date).strip()
 
     query = """
-    WITH target_resources AS (
+    WITH anchor AS (
+      -- The single week the dashboard reports on: the week we are currently in
+      -- (first week_ending on/after today). Falls back to the latest available
+      -- week if the feed has no forward-dated weeks.
+      SELECT COALESCE(
+        (SELECT MIN(timecard_week_ending)
+           FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+          WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+            AND timecard_week_ending >= CURRENT_DATE()),
+        (SELECT MAX(timecard_week_ending)
+           FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+          WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`))
+      ) AS wk
+    ),
+    target_resources AS (
+      -- Roster membership is established across the whole requested window so
+      -- that nobody drops off the headcount for a single quiet week.
       SELECT 
         resource_id,
         ANY_VALUE(full_name) AS resource_name,
@@ -91,9 +107,7 @@ def query_emea_delivery_data(
         'EMEA' AS region,
         'EMEA' AS hub,
         ANY_VALUE(practice) AS practice,
-        LOGICAL_OR(OOO) AS is_ooo,
-        MAX(timecard_week_ending) AS week_ending,
-        ROUND(AVG(scheduled_timecard_hours_net), 1) AS scheduled_timecard_hours
+        LOGICAL_OR(OOO) AS is_ooo
       FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
       WHERE (
           cost_center_name LIKE '%EMEA%'
@@ -107,36 +121,83 @@ def query_emea_delivery_data(
         AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
       GROUP BY resource_id
     ),
-    target_assignments AS (
-      SELECT 
-        ws.resource_id,
-        ws.project_id,
-        COALESCE(NULLIF(ws.assignment_id, ''), ws.project_id) AS assignment_id,
-        MAX(ws.schedule_week_ending) AS week_ending,
-        ROUND(AVG(ws.scheduled_timecard_hours), 1) AS scheduled_timecard_hours
-      FROM `concord-prod.service_cloudbi.weekly_schedules` ws
-      WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.weekly_schedules`)
-        AND ws.schedule_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
-        AND ws.scheduled_timecard_hours > 0
-      GROUP BY ws.resource_id, ws.project_id, assignment_id
+    current_load AS (
+      -- Person-level scheduled hours for the anchor week ONLY. Previously this
+      -- was AVG() across every week in the window, which reported a 15-week
+      -- average as if it were a single week's allocation.
+      SELECT
+        resource_id,
+        ROUND(SUM(scheduled_timecard_hours_net), 1) AS scheduled_timecard_hours
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND timecard_week_ending = (SELECT wk FROM anchor)
+      GROUP BY resource_id
     ),
     target_projects AS (
       SELECT 
         project_id,
         ANY_VALUE(project_name) AS project_name,
-        ANY_VALUE(COALESCE(account_name, project_name)) AS account_name,
+        -- No COALESCE onto project_name: an assignment with no account is not
+        -- evidence of a customer account.
+        ANY_VALUE(account_name) AS account_name,
         ANY_VALUE(COALESCE(engagement_manager, 'Delivery Lead')) AS engagement_manager_name,
-        ANY_VALUE(project_start_date) AS project_start_date,
-        ANY_VALUE(project_end_date) AS project_end_date,
+        -- Stored as STRING in the source; parse defensively.
+        ANY_VALUE(SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(project_start_date AS STRING), 1, 10))) AS project_start_date,
+        ANY_VALUE(SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(project_end_date AS STRING), 1, 10))) AS project_end_date,
         ANY_VALUE(project_status) AS project_status
       FROM `concord-prod.service_cloudbi.projects`
       GROUP BY project_id
+    ),
+    week_assignments AS (
+      -- Assignments scheduled in the anchor week only.
+      SELECT 
+        ws.resource_id,
+        ws.project_id,
+        COALESCE(NULLIF(ws.assignment_id, ''), ws.project_id) AS assignment_id,
+        ROUND(SUM(ws.scheduled_timecard_hours), 1) AS scheduled_timecard_hours
+      FROM `concord-prod.service_cloudbi.weekly_schedules` ws
+      WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.weekly_schedules`)
+        AND ws.schedule_week_ending = (SELECT wk FROM anchor)
+        AND ws.scheduled_timecard_hours > 0
+      GROUP BY ws.resource_id, ws.project_id, assignment_id
+    ),
+    active_assignments AS (
+      -- Drop work on projects that have already ended. Doing this here (rather
+      -- than in the final WHERE) keeps people whose only project has finished
+      -- on the roster, correctly showing as unassigned instead of vanishing.
+      SELECT
+        a.resource_id,
+        a.project_id,
+        a.assignment_id,
+        a.scheduled_timecard_hours,
+        p.project_name,
+        p.account_name,
+        p.engagement_manager_name,
+        p.project_start_date,
+        p.project_end_date
+      FROM week_assignments a
+      LEFT JOIN target_projects p ON a.project_id = p.project_id
+      WHERE p.project_end_date IS NULL OR p.project_end_date >= CURRENT_DATE()
+    ),
+    all_people AS (
+      -- Global ldap -> full name directory (~3k people, all regions), used to
+      -- resolve manager display names dynamically. This replaces a hardcoded
+      -- dictionary, so a newly appointed manager shows up automatically.
+      SELECT
+        COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap) AS ldap,
+        ANY_VALUE(full_name) AS full_name
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND full_name IS NOT NULL
+        AND ldap IS NOT NULL
+      GROUP BY 1
     )
     SELECT 
       r.resource_id,
       r.resource_name,
       COALESCE(r.ldap, SPLIT(r.resource_name, ' ')[OFFSET(0)]) AS ldap,
       r.manager_ldap,
+      mn.full_name AS manager_name_resolved,
       r.role,
       r.cost_center,
       r.cost_center_name,
@@ -144,25 +205,28 @@ def query_emea_delivery_data(
       r.hub,
       r.practice,
       r.is_ooo,
-      r.scheduled_timecard_hours,
-      COALESCE(a.week_ending, r.week_ending) AS week_ending,
+      COALESCE(cl.scheduled_timecard_hours, 0.0) AS scheduled_timecard_hours,
+      CAST((SELECT wk FROM anchor) AS STRING) AS week_ending,
       a.project_id,
       a.assignment_id,
-      p.account_name AS account_name,
+      a.account_name AS account_name,
       IF(a.project_id IS NOT NULL,
          IF(a.assignment_id IS NOT NULL AND a.assignment_id != '' AND a.assignment_id != a.project_id,
-            CONCAT(COALESCE(p.project_name, 'Cloud Transformation'), ' (', a.assignment_id, ')'),
-            COALESCE(p.project_name, 'Cloud Transformation')
+            CONCAT(COALESCE(a.project_name, 'Cloud Transformation'), ' (', a.assignment_id, ')'),
+            COALESCE(a.project_name, 'Cloud Transformation')
          ),
          NULL
       ) AS project_name,
-      IF(a.project_id IS NOT NULL, COALESCE(p.engagement_manager_name, 'PSO Lead'), NULL) AS engagement_manager_name,
-      COALESCE(p.project_start_date, @start_date) AS project_start_date,
-      COALESCE(p.project_end_date, @end_date) AS project_end_date,
-      COALESCE(a.scheduled_timecard_hours, r.scheduled_timecard_hours) AS proj_scheduled_hours
+      IF(a.project_id IS NOT NULL, COALESCE(a.engagement_manager_name, 'PSO Lead'), NULL) AS engagement_manager_name,
+      CAST(a.project_start_date AS STRING) AS project_start_date,
+      CAST(a.project_end_date AS STRING) AS project_end_date,
+      -- NULL when there is no assignment. Previously this fell back to the
+      -- person's total hours, inventing a phantom "Delivery Project".
+      a.scheduled_timecard_hours AS proj_scheduled_hours
     FROM target_resources r
-    LEFT JOIN target_assignments a ON r.resource_id = a.resource_id
-    LEFT JOIN target_projects p ON a.project_id = p.project_id
+    LEFT JOIN current_load cl ON r.resource_id = cl.resource_id
+    LEFT JOIN active_assignments a ON r.resource_id = a.resource_id
+    LEFT JOIN all_people mn ON r.manager_ldap = mn.ldap
     """
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
@@ -177,7 +241,12 @@ def query_emea_delivery_data(
         d["ldap"] = extract_ldap(d.get("ldap"), fallback=d.get("resource_name", ""))
         mgr_ldap = d.get("manager_ldap")
         if mgr_ldap:
-            d["manager_name"] = get_manager_name(mgr_ldap)
+            # Prefer the name resolved live from BigQuery so newly appointed
+            # managers appear without a code change. The static catalog is only
+            # a fallback for managers absent from the delivery dataset.
+            d["manager_name"] = d.pop("manager_name_resolved", None) or get_manager_name(mgr_ldap)
+        else:
+            d.pop("manager_name_resolved", None)
         rows.append(d)
     return rows
 
