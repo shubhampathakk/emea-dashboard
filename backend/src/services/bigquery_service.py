@@ -410,30 +410,45 @@ def query_emea_pipeline_data(
     else:
         start_date = str(start_date).strip()
 
+    # NOTE: pso_pipeline is stored at QUOTE-LINE grain - one opportunity can span
+    # several rows (1,506 rows for 816 opportunities in EMEA today). Verified grain
+    # of the columns we consume:
+    #   * total_sale_price_usd            -> LINE level  (varies across lines on 187
+    #                                        opps; SUM per opp reconciles to
+    #                                        total_sale_price_for_opportunity)  => SUM
+    #   * consultant/sce_hours_purchased  -> HEADER level (identical on every line of
+    #                                        an opportunity, 0 exceptions)      => ANY_VALUE
+    # Collapsing here keeps every downstream consumer (opportunity counts, workload
+    # counts, demand FTE) at opportunity grain without needing to dedupe in Python.
     query = """
+    WITH src AS (
+      SELECT *
+      FROM `concord-prod.service_cloudbi.pso_pipeline`
+      WHERE pso_region LIKE '%EMEA%'
+        AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.pso_pipeline`)
+        AND close_date BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
+    )
     SELECT
       opportunity_id,
-      opp_name,
-      account_name,
-      stage_name,
-      stage_simplified,
-      forecast_category,
-      COALESCE(probability, 0) AS probability,
+      ANY_VALUE(opp_name) AS opp_name,
+      ANY_VALUE(account_name) AS account_name,
+      ANY_VALUE(stage_name) AS stage_name,
+      ANY_VALUE(stage_simplified) AS stage_simplified,
+      ANY_VALUE(forecast_category) AS forecast_category,
+      COALESCE(ANY_VALUE(probability), 0) AS probability,
       'EMEA' AS region,
-      COALESCE(country, 'Unknown') AS country,
-      COALESCE(project_sub_region, '') AS project_sub_region,
-      COALESCE(offering, 'Standard PSO') AS offering,
-      COALESCE(dc_attached, false) AS dc_attached,
-      COALESCE(workload_id, opportunity_id) AS workload_id,
-      COALESCE(total_sale_price_usd, 0) AS total_sale_price_usd,
-      COALESCE(primary_solution, 'Cloud Solutions') AS solution,
-      COALESCE(consultant_hours_purchased, 0) AS consultant_hours_purchased,
-      COALESCE(sce_hours_purchased, 0) AS sce_hours_purchased,
-      CAST(close_date AS STRING) AS close_date
-    FROM `concord-prod.service_cloudbi.pso_pipeline`
-    WHERE pso_region LIKE '%EMEA%'
-      AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.pso_pipeline`)
-      AND close_date BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
+      COALESCE(ANY_VALUE(country), 'Unknown') AS country,
+      COALESCE(ANY_VALUE(project_sub_region), '') AS project_sub_region,
+      COALESCE(ANY_VALUE(offering), 'Standard PSO') AS offering,
+      COALESCE(LOGICAL_OR(dc_attached), false) AS dc_attached,
+      COALESCE(ANY_VALUE(workload_id), opportunity_id) AS workload_id,
+      COALESCE(SUM(total_sale_price_usd), 0) AS total_sale_price_usd,
+      COALESCE(ANY_VALUE(primary_solution), 'Cloud Solutions') AS solution,
+      COALESCE(ANY_VALUE(consultant_hours_purchased), 0) AS consultant_hours_purchased,
+      COALESCE(ANY_VALUE(sce_hours_purchased), 0) AS sce_hours_purchased,
+      CAST(ANY_VALUE(close_date) AS STRING) AS close_date
+    FROM src
+    GROUP BY opportunity_id
     ORDER BY close_date DESC
     """
     try:
