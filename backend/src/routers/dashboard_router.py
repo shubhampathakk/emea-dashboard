@@ -13,11 +13,27 @@ from src.services.bigquery_service import (
     get_bq_client, 
     query_emea_delivery_data, 
     query_emea_pipeline_data,
+    query_org_options,
     extract_ldap,
     fetch_projects_by_ldap,
     fetch_accounts_by_ldap
 )
 from src.services.manager_directory import get_manager_name
+
+# Default organisational scope. The roster is everyone whose management chain
+# contains this ldap, at any depth and in any region. Pass org_ldap=ALL to see
+# the whole EMEA pool instead.
+DEFAULT_ORG_LDAP = "guptaashutosh"
+
+
+def resolve_org_ldap(value: Optional[str]) -> Optional[str]:
+    """None/'' -> the default org. 'ALL' -> no org filter."""
+    v = (value or "").strip()
+    if not v:
+        return DEFAULT_ORG_LDAP
+    if v.lower() == "all":
+        return None
+    return v.lower()
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -650,6 +666,13 @@ def get_fallback_payload(start_date: Optional[str] = None, end_date: Optional[st
     payload["data_source"] = "cached_snapshot"
     payload["is_stale"] = True
     payload["snapshot_taken_at"] = snapshot_mtime
+    # The snapshot was captured before manager_hierarchy_user_names was
+    # selected, so there is nothing to filter on. Say so instead of labelling
+    # an unscoped roster with the requested manager's name.
+    payload["org_ldap"] = "ALL"
+    payload["org_name"] = "All EMEA"
+    payload["org_scope_applied"] = False
+    payload["pipeline_scope"] = "EMEA-wide"
     return payload
 
 @router.get("/dashboard/data")
@@ -657,16 +680,25 @@ def get_fallback_payload(start_date: Optional[str] = None, end_date: Optional[st
 def get_dashboard_data(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
+    org_ldap: Optional[str] = Query(None),
     bq_client: bigquery.Client = Depends(get_bq_client),
 ):
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
+    org = resolve_org_ldap(org_ldap)
     try:
-        delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end)
+        delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end, org_ldap=org)
+        # NOTE: pso_pipeline carries no manager hierarchy, so the pipeline stays
+        # EMEA-wide even when the roster is scoped to one org. The frontend
+        # labels this so the supply-vs-demand gap is not read as like-for-like.
         pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
         payload = build_dashboard_payload(delivery_rows, pipeline_rows)
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
+        payload["org_ldap"] = org or "ALL"
+        payload["org_name"] = get_manager_name(org) if org else "All EMEA"
+        payload["org_scope_applied"] = bool(org)
+        payload["pipeline_scope"] = "EMEA-wide"
         return payload
     except Exception as e:
         # This used to fail silently: the UI kept saying "Live Delivery Pool"
@@ -676,20 +708,60 @@ def get_dashboard_data(
         payload["data_source_error"] = str(e)[:300]
         return payload
 
+@router.get("/dashboard/org-options")
+@router.get("/org-options")
+def get_org_options(bq_client: bigquery.Client = Depends(get_bq_client)):
+    """Managers available for the org-scope dropdown, largest org first.
+
+    Derived live from manager_hierarchy_user_names so new managers appear
+    without a code change.
+    """
+    try:
+        options = query_org_options(bq_client, root_ldap=DEFAULT_ORG_LDAP)
+        # The root must always be selectable even if the headcount threshold or
+        # a data gap dropped it, otherwise the default scope is unreachable.
+        if not any(o.get("ldap") == DEFAULT_ORG_LDAP for o in options):
+            options.insert(0, {
+                "ldap": DEFAULT_ORG_LDAP,
+                "name": get_manager_name(DEFAULT_ORG_LDAP) or DEFAULT_ORG_LDAP,
+                "headcount": 0,
+            })
+        return {"status": "ok", "default": DEFAULT_ORG_LDAP, "options": options}
+    except Exception as e:
+        logger.warning(f"org-options query failed: {e}")
+        # Never block the UI on this: fall back to just the default entry.
+        return {
+            "status": "fallback",
+            "default": DEFAULT_ORG_LDAP,
+            "error": str(e)[:300],
+            "options": [{
+                "ldap": DEFAULT_ORG_LDAP,
+                "name": get_manager_name(DEFAULT_ORG_LDAP) or DEFAULT_ORG_LDAP,
+                "headcount": 0,
+            }],
+        }
+
+
 @router.post("/refresh-bq")
 def refresh_bq(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
+    org_ldap: Optional[str] = Query(None),
     bq_client: bigquery.Client = Depends(get_bq_client),
 ):
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
+    org = resolve_org_ldap(org_ldap)
     try:
-        delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end)
+        delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end, org_ldap=org)
         pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
         payload = build_dashboard_payload(delivery_rows, pipeline_rows)
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
+        payload["org_ldap"] = org or "ALL"
+        payload["org_name"] = get_manager_name(org) if org else "All EMEA"
+        payload["org_scope_applied"] = bool(org)
+        payload["pipeline_scope"] = "EMEA-wide"
         return {"status": "ok", "data": payload}
     except Exception as e:
         logger.warning(f"BigQuery refresh failed: {e}")

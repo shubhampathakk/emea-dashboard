@@ -412,6 +412,15 @@
 
         <!-- Right Header Actions -->
         <div class="flex items-center gap-2.5 mt-2 md:mt-0 flex-wrap">
+          <!-- Organisation scope. Roster = everyone whose management chain
+               contains this person, at any depth, in any region. -->
+          <div class="inline-flex items-center gap-1.5 bg-[#151030] border border-[#372f6b] text-xs px-2.5 py-1.5 rounded-xl shadow-xs" title="Show only people under this leader (any depth in the reporting chain)">
+            <svg class="w-3.5 h-3.5 text-[#c4b5fd]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            <select id="org-scope-select" onchange="onOrgScopeChange()" class="bg-transparent text-[#e2e8f0] text-xs font-bold focus:outline-none cursor-pointer max-w-[190px]">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+
           <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs" title="Weekly timecards close on Saturdays.">
             <span class="w-2 h-2 rounded-full bg-[#00cea8] animate-pulse"></span>
             <span><span id="data-source-label">Connecting…</span> &bull; <strong class="text-white font-semibold" id="header-active-week">Loading…</strong></span>
@@ -1656,6 +1665,9 @@
             </div>
           </div>
 
+          <!-- Mixed-scope warning: roster may be org-scoped while pipeline is EMEA-wide -->
+          <div id="gtm-scope-notice" class="hidden mb-3"></div>
+
           <!-- 5 Horizon Metric Cards -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" id="gtm-horizon-cards-container"></div>
         </div>
@@ -2271,6 +2283,104 @@
       return (parseFloat(a.hours) || 0) * 5;
     }
 
+    // When the roster is scoped to one org but the pipeline is not, the
+    // supply-vs-demand gap on Pipeline & Demand is NOT like-for-like. Say so
+    // on the tab rather than letting the comparison be misread.
+    function renderPipelineScopeNotice() {
+      const host = document.getElementById("gtm-scope-notice");
+      if (!host) return;
+      const org = globalData.org_ldap;
+      if (!org || org === "ALL") { host.innerHTML = ""; host.classList.add("hidden"); return; }
+      const people = (globalData.resources || []).length;
+      const orgName = globalData.org_name || org;
+      host.classList.remove("hidden");
+      host.innerHTML = `
+        <div class="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed">
+          <span class="text-sm leading-none mt-0.5">⚠️</span>
+          <span>
+            <strong>Mixed scope on this tab.</strong>
+            The roster is scoped to <strong>${orgName}</strong> (${people} people), but
+            <strong>pipeline data is EMEA-wide</strong> &mdash; the source table carries no
+            reporting hierarchy. Supply vs Demand below is therefore
+            <strong>not like-for-like</strong>: demand covers all of EMEA while supply covers
+            only this org.
+          </span>
+        </div>`;
+    }
+    window.renderPipelineScopeNotice = renderPipelineScopeNotice;
+
+    // ---------------------------------------------------------------
+    // Organisation scope
+    //
+    // The roster is everyone whose management chain contains the selected
+    // ldap, at ANY depth and in ANY region. The chain comes from BigQuery as
+    // manager_hierarchy_user_names, e.g.
+    //   |shubhampathakk|gauravtaneja|guptaashutosh|raosunil|lynb|...
+    // ---------------------------------------------------------------
+    const ORG_SCOPE_KEY = "emea_dashboard_org_scope";
+    let currentOrgLdap = null;
+
+    function getOrgScope() {
+      if (currentOrgLdap !== null) return currentOrgLdap;
+      try {
+        const saved = localStorage.getItem(ORG_SCOPE_KEY);
+        if (saved !== null) { currentOrgLdap = saved; return saved; }
+      } catch (e) { /* storage unavailable */ }
+      return ""; // empty => backend applies its default org
+    }
+
+    async function loadOrgOptions() {
+      const sel = document.getElementById("org-scope-select");
+      if (!sel) return;
+      try {
+        const token = (typeof window.getValidToken === 'function') ? window.getValidToken() : null;
+        const headers = {};
+        if (token) {
+          headers["X-User-OAuth-Token"] = token;
+          headers["X-Google-OAuth-Token"] = token;
+        }
+        const res = await fetch('/api/org-options', { headers });
+        const json = await res.json();
+        const opts = json.options || [];
+        const chosen = getOrgScope() || json.default || "";
+
+        sel.innerHTML = "";
+        const allOpt = document.createElement("option");
+        allOpt.value = "ALL";
+        allOpt.textContent = "All EMEA";
+        sel.appendChild(allOpt);
+
+        opts.forEach(o => {
+          const el = document.createElement("option");
+          el.value = o.ldap;
+          el.textContent = o.headcount ? `${o.name} (${o.headcount})` : o.name;
+          sel.appendChild(el);
+        });
+
+        // The chosen org may be missing from the list (small org filtered out
+        // by min_headcount) - add it so the selection is never silently lost.
+        if (chosen && chosen !== "ALL" && !opts.some(o => o.ldap === chosen)) {
+          const el = document.createElement("option");
+          el.value = chosen;
+          el.textContent = chosen;
+          sel.appendChild(el);
+        }
+        sel.value = chosen || "ALL";
+      } catch (e) {
+        console.warn("Could not load org options:", e);
+      }
+    }
+
+    function onOrgScopeChange() {
+      const sel = document.getElementById("org-scope-select");
+      if (!sel) return;
+      currentOrgLdap = sel.value;
+      try { localStorage.setItem(ORG_SCOPE_KEY, currentOrgLdap); } catch (e) {}
+      loadData();
+    }
+    window.onOrgScopeChange = onOrgScopeChange;
+    window.loadOrgOptions = loadOrgOptions;
+
     // Make the data source unmistakable. The dashboard previously said
     // "Live Delivery Pool" even when BigQuery had failed and the backend had
     // silently served a stale cached snapshot.
@@ -2305,9 +2415,14 @@
       }
       const taken = (data && data.snapshot_taken_at) ? ` Snapshot taken ${data.snapshot_taken_at}.` : "";
       const why = (data && data.data_source_error) ? ` Reason: ${data.data_source_error}` : "";
+      // The snapshot predates manager_hierarchy_user_names, so it cannot be
+      // narrowed to one org. Never let the picker imply otherwise.
+      const unscoped = (data && data.org_scope_applied === false)
+        ? ` The org filter is <strong>not applied</strong> to cached data \u2014 this is the full EMEA roster.`
+        : "";
       banner.innerHTML =
         `<span>\u26A0\uFE0F</span><span>You are viewing <strong>cached data, not live BigQuery</strong>.` +
-        `${taken} Sign in again to refresh.${why}</span>`;
+        `${taken}${unscoped} Sign in again to refresh.${why}</span>`;
     }
 
 
@@ -2395,6 +2510,8 @@
         const params = new URLSearchParams();
         if (sDate) params.append("start_date", sDate);
         if (eDate) params.append("end_date", eDate);
+        const orgScope = getOrgScope();
+        if (orgScope) params.append("org_ldap", orgScope);
         const qs = params.toString() ? "?" + params.toString() : "";
 
         if (syncBq) {
@@ -2426,6 +2543,19 @@
         }
 
         renderDataSourceBanner(globalData);
+
+        // Reflect the scope the backend actually applied, and (re)populate the
+        // picker on first load.
+        if (globalData.org_ldap && currentOrgLdap === null) {
+          currentOrgLdap = globalData.org_ldap === "ALL" ? "ALL" : globalData.org_ldap;
+        }
+        const orgSel = document.getElementById("org-scope-select");
+        if (orgSel && (!orgSel.options.length || orgSel.options[0].value === "")) {
+          loadOrgOptions();
+        } else if (orgSel && globalData.org_ldap) {
+          orgSel.value = globalData.org_ldap;
+        }
+        renderPipelineScopeNotice();
         // The assistant's static welcome card is plain markup, so fill its
         // scope line and starter chips from the real payload.
         try {

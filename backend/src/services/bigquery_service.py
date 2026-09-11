@@ -57,12 +57,21 @@ def get_bq_client(
     return bigquery.Client(project=PROJECT_ID)
 
 def query_emea_delivery_data(
-    client: bigquery.Client, 
-    start_date: Optional[str] = None, 
-    end_date: Optional[str] = None
+    client: bigquery.Client,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    org_ldap: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Fetches active EMEA & GSD resources and weekly schedules filtered by date range.
+    Fetches delivery resources and weekly schedules filtered by date range.
+
+    org_ldap: when supplied, the roster is everyone whose management chain
+    contains that ldap, at any depth, REGARDLESS of region. The chain lives in
+    `manager_hierarchy_user_names` as a pipe-delimited string, e.g.
+        |shubhampathakk|gauravtaneja|guptaashutosh|raosunil|lynb|...
+    so a person reports (indirectly) to X when the chain contains '|X|'.
+
+    When org_ldap is None the legacy EMEA cost-centre/region filter applies.
     Defaults to last 90 days if no date range is provided. Zero LIMIT applied.
     """
     today = datetime.date.today()
@@ -103,20 +112,17 @@ def query_emea_delivery_data(
         ANY_VALUE(role) AS role,
         ANY_VALUE(cost_center) AS cost_center,
         ANY_VALUE(cost_center_name) AS cost_center_name,
-        -- All matched resources are part of the unified EMEA delivery pool (CC1 is EMEA ring-fenced)
-        'EMEA' AS region,
-        'EMEA' AS hub,
+        -- Real region, not a hardcoded 'EMEA'. An org-scoped roster can span
+        -- regions (guptaashutosh's org is entirely 'Delivery Center'), and
+        -- stamping everyone 'EMEA' mislabels them.
+        ANY_VALUE(COALESCE(region, pso_region, 'Unknown')) AS region,
+        IF(LOGICAL_OR(COALESCE(region, pso_region, '') LIKE '%Delivery Center%'
+                      OR COALESCE(region, pso_region, '') LIKE '%GSD%'
+                      OR cost_center = 'CC1'), 'GSD', 'EMEA') AS hub,
         ANY_VALUE(practice) AS practice,
         LOGICAL_OR(OOO) AS is_ooo
       FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
-      WHERE (
-          cost_center_name LIKE '%EMEA%'
-          OR cost_center = 'CC1'
-          OR region = 'EMEA'
-          OR pso_region = 'EMEA'
-        )
-        AND (cost_center_name NOT LIKE '%JAPAC%' AND cost_center_name NOT LIKE '%LATAM%' AND cost_center_name NOT LIKE '%NORTHAM%')
-        AND (region NOT LIKE '%AMER%' AND region NOT LIKE '%NorthAM%')
+      WHERE __ROSTER_SCOPE__
         AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
         AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
       GROUP BY resource_id
@@ -228,12 +234,29 @@ def query_emea_delivery_data(
     LEFT JOIN active_assignments a ON r.resource_id = a.resource_id
     LEFT JOIN all_people mn ON r.manager_ldap = mn.ldap
     """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("start_date", "STRING", start_date),
-            bigquery.ScalarQueryParameter("end_date", "STRING", end_date),
-        ]
-    )
+    params = [
+        bigquery.ScalarQueryParameter("start_date", "STRING", start_date),
+        bigquery.ScalarQueryParameter("end_date", "STRING", end_date),
+    ]
+
+    clean_org = (org_ldap or "").strip().lower()
+    if clean_org and clean_org != "all":
+        # Whole management chain, any depth, any region.
+        roster_scope = "STRPOS(COALESCE(manager_hierarchy_user_names, ''), @org_token) > 0"
+        params.append(
+            bigquery.ScalarQueryParameter("org_token", "STRING", f"|{clean_org}|")
+        )
+    else:
+        roster_scope = (
+            "( cost_center_name LIKE '%EMEA%' OR cost_center = 'CC1'"
+            "  OR region = 'EMEA' OR pso_region = 'EMEA' )"
+            " AND (cost_center_name NOT LIKE '%JAPAC%' AND cost_center_name NOT LIKE '%LATAM%'"
+            "      AND cost_center_name NOT LIKE '%NORTHAM%')"
+            " AND (region NOT LIKE '%AMER%' AND region NOT LIKE '%NorthAM%')"
+        )
+    query = query.replace("__ROSTER_SCOPE__", roster_scope)
+
+    job_config = bigquery.QueryJobConfig(query_parameters=params)
     results = client.query(query, job_config=job_config).result(timeout=45)
     rows = []
     for row in results:
@@ -249,6 +272,99 @@ def query_emea_delivery_data(
             d.pop("manager_name_resolved", None)
         rows.append(d)
     return rows
+
+def query_org_options(
+    client: bigquery.Client,
+    root_ldap: str,
+    min_headcount: int = 2,
+) -> List[Dict[str, Any]]:
+    """Managers inside `root_ldap`'s org that can be used to scope the dashboard.
+
+    Built by unnesting every `manager_hierarchy_user_names` chain, so the list
+    stays correct as the org changes - no hardcoded catalog.
+
+    The chain is ordered leaf -> root (e.g. `|shubhampathakk|gauravtaneja|
+    guptaashutosh|raosunil|...|`), so a manager is a *descendant* of the root
+    exactly when their offset in the chain is <= the root's offset. Anything
+    past the root is an ancestor (raosunil, sundar, ...) and is deliberately
+    excluded: an unfiltered list returns the entire global PSO org (2,400+
+    people under the top-level leaders), which is useless in a dropdown.
+
+    `headcount` is intentionally computed with the same predicate the delivery
+    query uses (the manager appears anywhere in the person's chain), so the
+    number shown next to an option equals the roster size after selecting it.
+    Names are resolved from the people directory where the manager also appears
+    as a resource; senior leaders often do not, in which case we fall back to
+    MANAGER_CATALOG and finally to the raw ldap.
+    """
+    query = """
+    WITH latest AS (
+      SELECT
+        resource_id,
+        manager_hierarchy_user_names AS chain
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND timecard_week_ending BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+                                     AND DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY)
+        AND manager_hierarchy_user_names IS NOT NULL
+        AND STRPOS(manager_hierarchy_user_names, @root_token) > 0
+    ),
+    chains AS (
+      SELECT
+        resource_id,
+        TRIM(mgr) AS mgr_ldap,
+        off,
+        MIN(CASE WHEN TRIM(mgr) = @root_ldap THEN off END)
+          OVER (PARTITION BY resource_id) AS root_off
+      FROM latest, UNNEST(SPLIT(chain, '|')) AS mgr WITH OFFSET off
+      WHERE TRIM(mgr) != ''
+    ),
+    scoped AS (
+      SELECT DISTINCT resource_id, mgr_ldap
+      FROM chains
+      WHERE root_off IS NOT NULL AND off <= root_off
+    ),
+    people AS (
+      SELECT
+        COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap) AS ldap,
+        ANY_VALUE(full_name) AS full_name
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND ldap IS NOT NULL
+      GROUP BY 1
+    )
+    SELECT
+      s.mgr_ldap AS ldap,
+      ANY_VALUE(p.full_name) AS full_name,
+      COUNT(DISTINCT s.resource_id) AS headcount
+    FROM scoped s
+    LEFT JOIN people p ON p.ldap = s.mgr_ldap
+    GROUP BY s.mgr_ldap
+    HAVING headcount >= @min_headcount
+    ORDER BY headcount DESC
+    """
+    root = (root_ldap or "").strip().lower()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("root_ldap", "STRING", root),
+            bigquery.ScalarQueryParameter("root_token", "STRING", f"|{root}|"),
+            bigquery.ScalarQueryParameter("min_headcount", "INT64", int(min_headcount)),
+        ]
+    )
+    results = client.query(query, job_config=job_config).result(timeout=45)
+    out = []
+    for row in results:
+        d = dict(row)
+        ldap = d.get("ldap")
+        out.append({
+            "ldap": ldap,
+            # Fall back to the static catalog, then to the ldap itself, so the
+            # dropdown never shows a blank entry.
+            "name": d.get("full_name") or get_manager_name(ldap) or ldap,
+            "headcount": int(d.get("headcount") or 0),
+        })
+    return out
+
 
 def query_emea_pipeline_data(
     client: bigquery.Client, 
