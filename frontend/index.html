@@ -532,11 +532,10 @@
             <span class="hidden sm:inline">Sync BQ</span>
           </button>
 
-          <button onclick="toggleAgentDrawer()" class="relative overflow-hidden group bg-gradient-to-r from-[#915EFF] via-[#bf61ff] to-[#ec008c] hover:brightness-110 text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-md shadow-[#915EFF]/30 hover:shadow-lg hover:shadow-[#915EFF]/50 flex items-center gap-2 transition-all duration-200 cursor-pointer active:scale-95 border border-white/20" title="Open EMEA 360 Assistant (Cmd+K)">
-            <span class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out"></span>
-            <span class="text-amber-300 animate-pulse">✨</span>
-            <span class="relative z-10">EMEA 360 Assistant</span>
-          </button>
+          <!-- The header "EMEA 360 Assistant" button was removed: it called the
+               same toggleAgentDrawer() as the floating button in the bottom
+               right, so it was a duplicate entry point. The floating button and
+               the Cmd/Ctrl+K shortcut remain. -->
 
           <button onclick="openAddResourceModal()" class="inline-flex items-center gap-1.5 bg-[#915EFF] hover:bg-[#7e47ea] text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md shadow-[#915EFF]/30 border border-[#b48cff]/30 transition-all duration-200 cursor-pointer">
             <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -6221,7 +6220,12 @@ Thank you!
 
   function showLoginOverlay(msg) {
     const overlay = document.getElementById("login-overlay");
-    if (overlay) overlay.style.display = "";
+    // Must restore "flex", not "". The overlay carries display:flex in its
+    // inline style attribute, and setting display to "" DELETES that inline
+    // property, so the div fell back to display:block. Its align-items /
+    // justify-content centering then did nothing and the sign-in card was
+    // pinned to the top-left corner.
+    if (overlay) overlay.style.display = "flex";
     const statusEl = document.getElementById("login-status");
     if (statusEl && msg) statusEl.innerText = msg;
   }
