@@ -290,6 +290,87 @@ def query_emea_delivery_data(
         AND full_name IS NOT NULL
         AND ldap IS NOT NULL
       GROUP BY 1
+    ),
+    -- ================= Delivery Executive (account level) =================
+    -- There is no "delivery_executive" column anywhere in the source. The DE is
+    -- recoverable because `role` carries the literal value 'Delivery Executive'
+    -- (103 people hold it). Two signals, in priority order:
+    --
+    --   A. projects.engagement_manager for the account, WHERE that ldap is a
+    --      Delivery Executive. engagement_manager is a mixed bag - it holds
+    --      delivery leads, engineering managers and DEs depending on the
+    --      project - so the role filter is what makes it meaningful.
+    --   B. otherwise, whoever is actually STAFFED on the account with
+    --      resource_role = 'Delivery Executive', ranked by hours.
+    --
+    -- Validated against known ground truth: Unilever -> thomasazais
+    -- (Thomas Azais). Covers 14 of the 30 in-scope accounts; the rest have no
+    -- DE signal at all and must render as "Unassigned".
+    de_people AS (
+      SELECT DISTINCT LOWER(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) AS ldap
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND role = 'Delivery Executive'
+        AND ldap IS NOT NULL
+    ),
+    scope_accounts AS (
+      -- Only resolve a DE for accounts this roster actually touches. Keeps the
+      -- two joins below small.
+      SELECT DISTINCT account_name
+      FROM active_assignments
+      WHERE account_name IS NOT NULL AND account_name != ''
+    ),
+    de_signal_a AS (
+      SELECT DISTINCT
+        p.account_name,
+        LOWER(TRIM(p.engagement_manager)) AS de_ldap
+      FROM `concord-prod.service_cloudbi.projects` p
+      JOIN de_people d ON LOWER(TRIM(p.engagement_manager)) = d.ldap
+      WHERE p._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.projects`)
+        AND p.account_name IN (SELECT account_name FROM scope_accounts)
+    ),
+    de_signal_b AS (
+      -- A 13-week window, not just the anchor week: a DE is often scheduled
+      -- intermittently, and a badge that appears and disappears week to week is
+      -- worse than one that is stable.
+      SELECT
+        pa.account_name,
+        ws.resource_name AS de_name,
+        ROUND(SUM(ws.scheduled_timecard_hours), 1) AS hrs
+      FROM `concord-prod.service_cloudbi.weekly_schedules` ws
+      JOIN (
+        SELECT project_id, ANY_VALUE(account_name) AS account_name
+        FROM `concord-prod.service_cloudbi.projects`
+        WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.projects`)
+          AND account_name IN (SELECT account_name FROM scope_accounts)
+        GROUP BY project_id
+      ) pa ON ws.project_id = pa.project_id
+      WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.weekly_schedules`)
+        AND ws.schedule_week_ending BETWEEN DATE_SUB((SELECT wk FROM anchor), INTERVAL 12 WEEK)
+                                        AND (SELECT wk FROM anchor)
+        AND ws.scheduled_timecard_hours > 0
+        AND ws.resource_role = 'Delivery Executive'
+      GROUP BY 1, 2
+    ),
+    de_candidates AS (
+      SELECT account_name, de_ldap, CAST(NULL AS STRING) AS de_name, 1 AS pri, 0.0 AS hrs
+      FROM de_signal_a
+      UNION ALL
+      SELECT account_name, CAST(NULL AS STRING) AS de_ldap, de_name, 2 AS pri, hrs
+      FROM de_signal_b
+    ),
+    account_de AS (
+      -- Exactly one row per account, so the join below cannot fan out.
+      SELECT account_name, de_ldap, de_name
+      FROM (
+        SELECT c.*,
+               ROW_NUMBER() OVER (
+                 PARTITION BY account_name
+                 ORDER BY pri, hrs DESC, COALESCE(de_ldap, de_name)
+               ) AS rn
+        FROM de_candidates c
+      )
+      WHERE rn = 1
     )
     SELECT 
       r.resource_id,
@@ -337,6 +418,10 @@ def query_emea_delivery_data(
       COALESCE(egmn.full_name, a.pso_engineering_manager) AS pso_engineering_manager,
       a.project_manager         AS project_manager,
       a.project_manager_ldap    AS project_manager_ldap,
+      -- Account-level Delivery Executive. Derived (see account_de above), not a
+      -- source column. NULL for the 16 accounts with no DE signal.
+      de.de_ldap AS delivery_executive_ldap,
+      COALESCE(de.de_name, den.full_name, de.de_ldap) AS delivery_executive,
       CAST(a.project_start_date AS STRING) AS project_start_date,
       CAST(a.project_end_date AS STRING) AS project_end_date,
       -- NULL when there is no assignment. Previously this fell back to the
@@ -348,19 +433,35 @@ def query_emea_delivery_data(
     LEFT JOIN all_people mn   ON LOWER(r.manager_ldap) = mn.ldap
     LEFT JOIN all_people emn  ON LOWER(a.engagement_manager_name) = emn.ldap
     LEFT JOIN all_people egmn ON LOWER(a.pso_engineering_manager) = egmn.ldap
+    LEFT JOIN account_de de   ON a.account_name = de.account_name
+    LEFT JOIN all_people den  ON de.de_ldap = den.ldap
     """
     params = [
         bigquery.ScalarQueryParameter("start_date", "STRING", start_date),
         bigquery.ScalarQueryParameter("end_date", "STRING", end_date),
     ]
 
-    clean_org = (org_ldap or "").strip().lower()
-    if clean_org and clean_org != "all":
-        # Whole management chain, any depth, any region.
-        roster_scope = "STRPOS(COALESCE(manager_hierarchy_user_names, ''), @org_token) > 0"
-        params.append(
-            bigquery.ScalarQueryParameter("org_token", "STRING", f"|{clean_org}|")
-        )
+    # org_ldap accepts a comma-separated list so the UI can offer a multi-select
+    # filter. Each leader contributes its own OR'd predicate. Values are bound as
+    # query parameters, never interpolated, so this stays injection-safe however
+    # many are supplied.
+    raw_orgs = [t.strip().lower() for t in (org_ldap or "").split(",")]
+    clean_orgs = [t for t in raw_orgs if t and t != "all"]
+    # An explicit "all" anywhere in the selection means the whole EMEA pool, so
+    # it wins over any individual leader also ticked.
+    wants_all = any(t == "all" for t in raw_orgs) or not clean_orgs
+    if not wants_all:
+        preds = []
+        for i, token in enumerate(dict.fromkeys(clean_orgs)):  # de-dup, keep order
+            name = f"org_token_{i}"
+            preds.append(f"STRPOS(COALESCE(manager_hierarchy_user_names, ''), @{name}) > 0")
+            params.append(
+                bigquery.ScalarQueryParameter(name, "STRING", f"|{token}|")
+            )
+        # Union of the selected orgs. A person under two selected leaders still
+        # appears once: this filters rows, and target_resources GROUPs BY
+        # resource_id afterwards.
+        roster_scope = "(" + " OR ".join(preds) + ")"
     else:
         roster_scope = (
             "( cost_center_name LIKE '%EMEA%' OR cost_center = 'CC1'"

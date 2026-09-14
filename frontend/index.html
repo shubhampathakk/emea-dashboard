@@ -408,7 +408,7 @@
         </div>
 
         <h2 style="margin-top: 26px; font-size: 17px; font-weight: 800; color: #fff; letter-spacing: -.01em; text-align: center;">
-          EMEA Delivery &amp; Staffing 360
+          EMEA Delivery 360
         </h2>
         <p id="boot-scope" style="margin-top: 6px; font-size: 11px; color: #a5b4fc; font-weight: 600; text-align: center;">
           Connecting to BigQuery
@@ -445,13 +445,31 @@
       </div>
     </div>
 
+    <!-- Light loading overlay for FILTER / SCOPE changes.
+         Deliberately not the full-screen boot loader: that one is reserved for
+         the very first paint. This dims and blurs the dashboard so the numbers
+         underneath are visibly "not current" while the new query runs, without
+         tearing the whole screen down. -->
+    <div id="filter-loading" style="z-index: 9990;" class="hidden fixed inset-0 bg-slate-900/25 backdrop-blur-[3px] flex items-start justify-center pt-32">
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl px-5 py-4 flex items-center gap-3.5">
+        <svg class="w-5 h-5 animate-spin text-[#915EFF] shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <div>
+          <div class="text-sm font-bold text-slate-800" id="filter-loading-title">Updating scope</div>
+          <div class="text-[11px] text-slate-500 mt-0.5" id="filter-loading-sub">Querying BigQuery — this takes a few seconds</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Login Overlay -->
     <div id="login-overlay" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: #0f172a;">
         <div class="bg-white border border-slate-200 p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-md text-center">
           <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 border border-blue-100">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
           </div>
-          <h2 class="text-xl font-bold text-slate-900">EMEA Staffing &amp; Delivery 360</h2>
+          <h2 class="text-xl font-bold text-slate-900">EMEA Delivery 360</h2>
           <p class="mt-2 text-xs text-slate-500" id="login-status">Sign in with your Google account to connect live to BigQuery.</p>
           <div class="flex flex-col gap-2.5 mt-6 w-full">
             <button id="login-btn" style="display: flex;" class="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white text-xs font-bold py-3 px-4 rounded-xl items-center justify-center gap-2 shadow-xs transition cursor-pointer">
@@ -496,7 +514,7 @@
             <div>
               <div class="flex items-center gap-2.5 flex-wrap">
                 <h1 class="font-title text-base md:text-lg font-extrabold tracking-tight text-white flex items-center gap-2.5">
-                  <span>EMEA Delivery &amp; Staffing 360</span>
+                  <span>EMEA Delivery 360</span>
                   <span class="inline-flex items-center gap-1.5 bg-[#151030] text-[#c4b5fd] border border-[#915EFF]/40 text-[11px] font-bold px-3 py-0.5 rounded-full font-mono shadow-xs backdrop-blur-md">
                     <span class="w-1.5 h-1.5 rounded-full bg-[#00cea8] animate-pulse shadow-xs shadow-[#00cea8]/50"></span>
                     <span>Google Cloud</span>
@@ -515,17 +533,47 @@
         <!-- Right Header Actions -->
         <div class="flex items-center gap-2.5 mt-2 md:mt-0 flex-wrap">
           <!-- Organisation scope. Roster = everyone whose management chain
-               contains this person, at any depth, in any region. -->
-          <div class="inline-flex items-center gap-1.5 bg-[#151030] border border-[#372f6b] text-xs px-2.5 py-1.5 rounded-xl shadow-xs" title="Show only people under this leader (any depth in the reporting chain)">
-            <svg class="w-3.5 h-3.5 text-[#c4b5fd]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-            <select id="org-scope-select" onchange="onOrgScopeChange()" class="bg-transparent text-[#e2e8f0] text-xs font-bold focus:outline-none cursor-pointer max-w-[190px]">
-              <option value="">Loading…</option>
-            </select>
+               contains any of the selected leaders, at any depth, in any
+               region. Multi-select: nothing is re-queried until Apply is
+               pressed, so ticking three leaders costs ONE BigQuery round-trip
+               rather than three. -->
+          <div class="relative" id="org-scope-wrap">
+            <button type="button" id="org-scope-btn" onclick="toggleOrgScopeMenu(event)"
+                    class="inline-flex items-center gap-1.5 bg-[#151030] border border-[#372f6b] hover:border-[#4c4190] text-xs px-2.5 py-1.5 rounded-xl shadow-xs cursor-pointer transition-colors"
+                    title="Show only people under the selected leaders (any depth in the reporting chain)">
+              <svg class="w-3.5 h-3.5 text-[#c4b5fd] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+              <span id="org-scope-label" class="text-[#e2e8f0] font-bold truncate max-w-[190px]">Loading…</span>
+              <svg class="w-3 h-3 text-[#8b84b8] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+
+            <div id="org-scope-menu"
+                 class="hidden absolute right-0 mt-2 w-80 bg-[#151030] border border-[#372f6b] rounded-xl shadow-2xl z-50 overflow-hidden">
+              <div class="px-3 pt-2.5 pb-1.5 border-b border-[#2a2356]">
+                <div class="text-[11px] font-bold text-[#e2e8f0]">Organisation scope</div>
+                <div class="text-[10px] text-[#8b84b8] mt-0.5">Everyone reporting up to the people you tick.</div>
+              </div>
+              <div id="org-scope-options" class="max-h-72 overflow-y-auto py-1"></div>
+              <div class="flex items-center justify-between gap-2 px-2.5 py-2 border-t border-[#2a2356] bg-[#120e29]">
+                <button type="button" onclick="resetOrgScopeSelection()"
+                        class="text-[11px] font-semibold text-[#8b84b8] hover:text-[#c4b5fd] px-2 py-1 rounded-lg transition cursor-pointer">
+                  Clear
+                </button>
+                <button type="button" id="org-scope-apply" onclick="applyOrgScope()"
+                        class="bg-[#915EFF] hover:bg-[#7e47ea] text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg shadow-md shadow-[#915EFF]/25 transition cursor-pointer">
+                  Apply
+                </button>
+              </div>
+            </div>
           </div>
 
+          <!-- "Live Delivery Pool" was dropped from this badge to save header
+               space: the pulsing green dot already conveys "live". The label
+               span is KEPT (hidden while live) because renderDataSourceBanner()
+               writes the "CACHED DATA - not live" warning into it, and that
+               warning must never be lost. -->
           <div id="live-week-badge" class="hidden sm:inline-flex items-center gap-2 bg-[#151030] text-[#c4b5fd] border border-[#372f6b] text-xs font-medium px-3.5 py-2 rounded-xl shadow-xs" title="Weekly timecards close on Saturdays.">
             <span class="w-2 h-2 rounded-full bg-[#00cea8] animate-pulse"></span>
-            <span><span id="data-source-label">Connecting…</span> &bull; <strong class="text-white font-semibold" id="header-active-week">Loading…</strong></span>
+            <span><span id="data-source-label" class="hidden"></span><strong class="text-white font-semibold" id="header-active-week">Loading…</strong></span>
           </div>
 
           <button id="btn-sync-bq" onclick="loadData(true)" class="inline-flex items-center gap-1.5 bg-[#151030] hover:bg-[#1f1745] text-[#e2e8f0] hover:text-white border border-[#372f6b] text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-200 shadow-xs hover:shadow-sm cursor-pointer" title="Sync live tables directly from BigQuery">
@@ -647,7 +695,7 @@
         </div>
         <div class="flex items-baseline justify-between">
           <div class="text-3xl font-black font-title text-[#009b7e] tracking-tight" id="kpi-staffed-count">—</div>
-          <span class="bg-[#00cea8]/10 text-[#008f73] border border-[#00cea8]/25 text-[11px] font-bold px-2 py-0.5 rounded-lg hover:bg-[#00cea8]/20 transition shadow-2xs" id="kpi-staffed-pct">— Dedicated</span>
+          <span class="bg-[#00cea8]/10 text-[#008f73] border border-[#00cea8]/25 text-[11px] font-bold px-2 py-0.5 rounded-lg hover:bg-[#00cea8]/20 transition shadow-2xs" id="kpi-staffed-pct">— of team</span>
         </div>
         <div class="flex items-center justify-between mt-2 pt-1 border-t border-slate-100">
           <span class="text-[11px] text-slate-500 font-medium">Full-Time Dedicated Delivery</span>
@@ -1206,6 +1254,7 @@
             <select id="roster-filter-risk" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
               <option value="ALL">All Allocation Statuses</option>
               <option value="Staffed">100% Fully Staffed</option>
+              <option value="Over">Over-allocated &gt;100%</option>
               <option value="Partial">Partial Allocation &lt;100%</option>
               <option value="Bench / Free">Bench / Available Capacity</option>
               <option value="Overdue">Overdue End-Date</option>
@@ -1262,12 +1311,12 @@
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h2 class="font-title text-base font-bold text-slate-900 tracking-tight">Global Customer Breakdown (<span id="portfolio-total-accounts-count" class="font-bold text-indigo-600">56</span> Accounts)</h2>
-            <p class="text-xs text-slate-400 mt-0.5">Staffing allocation counts split by region per customer</p>
+            <p class="text-xs text-slate-400 mt-0.5">Staffing allocation counts split by delivery hub (PSO / GSD) per customer</p>
           </div>
           <div class="flex gap-2 text-[10px] font-bold">
-            <span class="text-slate-400">Region Key:</span>
+            <span class="text-slate-400">Hub Key:</span>
             <span class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">GSD</span>
-            <span class="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">EMEA</span>
+            <span class="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">PSO</span>
           </div>
         </div>
 
@@ -2193,6 +2242,40 @@
     window.hideBootLoader = hideBootLoader;
     window.setBootStage = setBootStage;
 
+    // ---------------------------------------------------------------
+    // Light overlay for filter / scope changes.
+    //
+    // The full boot loader is now shown ONLY on the very first paint. Any
+    // later reload (scope change, date filter, Sync BQ) uses this instead, so
+    // the dashboard does not tear itself down every time a filter moves.
+    // ---------------------------------------------------------------
+    let filterLoaderWatchdog = null;
+
+    function showFilterLoader(title, sub) {
+      const el = document.getElementById("filter-loading");
+      if (!el) return;
+      const t = document.getElementById("filter-loading-title");
+      const s = document.getElementById("filter-loading-sub");
+      if (t && title) t.textContent = title;
+      if (s) s.textContent = sub || "Querying BigQuery \u2014 this takes a few seconds";
+      el.classList.remove("hidden");
+      // Same safety net as the boot loader: never trap the user behind it.
+      if (filterLoaderWatchdog) clearTimeout(filterLoaderWatchdog);
+      filterLoaderWatchdog = setTimeout(() => {
+        console.warn("Filter loader watchdog fired - releasing the overlay.");
+        hideFilterLoader();
+      }, 60000);
+    }
+
+    function hideFilterLoader() {
+      if (filterLoaderWatchdog) { clearTimeout(filterLoaderWatchdog); filterLoaderWatchdog = null; }
+      const el = document.getElementById("filter-loading");
+      if (el) el.classList.add("hidden");
+    }
+
+    window.showFilterLoader = showFilterLoader;
+    window.hideFilterLoader = hideFilterLoader;
+
     function showTopLoadingBar() {
       const bar = document.getElementById("top-loading-bar");
       if (!bar) return;
@@ -2490,7 +2573,15 @@
     //   |shubhampathakk|gauravtaneja|guptaashutosh|raosunil|lynb|...
     // ---------------------------------------------------------------
     const ORG_SCOPE_KEY = "emea_dashboard_org_scope";
+    // The APPLIED scope, as a comma-separated string ("" => backend default,
+    // "ALL" => whole EMEA pool). The backend splits this on commas.
     let currentOrgLdap = null;
+    // The PENDING tick state inside the open menu. Kept separate from the
+    // applied scope so that ticking boxes never triggers a query - only Apply
+    // does. Without this split, a 3-leader selection would fire 3 BigQuery
+    // round-trips and show two throwaway intermediate states.
+    let pendingOrgSelection = null;
+    let orgOptionsCache = [];
 
     function getOrgScope() {
       if (currentOrgLdap !== null) return currentOrgLdap;
@@ -2501,9 +2592,148 @@
       return ""; // empty => backend applies its default org
     }
 
+    function orgScopeAsArray(v) {
+      return String(v == null ? "" : v)
+        .split(",").map(s => s.trim()).filter(Boolean);
+    }
+
+    // Human-readable summary for the collapsed button.
+    function orgScopeLabelText(sel) {
+      if (!sel.length || sel.includes("ALL")) return "All EMEA";
+      const nameOf = (ldap) => {
+        const hit = orgOptionsCache.find(o => o.ldap === ldap);
+        if (!hit) return ldap;
+        return hit.headcount ? `${hit.name} (${hit.headcount})` : hit.name;
+      };
+      if (sel.length === 1) return nameOf(sel[0]);
+      return `${sel.length} orgs selected`;
+    }
+
+    function updateOrgScopeLabel() {
+      const el = document.getElementById("org-scope-label");
+      if (!el) return;
+      const sel = pendingOrgSelection !== null
+        ? pendingOrgSelection
+        : orgScopeAsArray(getOrgScope());
+      el.textContent = orgScopeLabelText(sel);
+    }
+
+    function renderOrgOptions() {
+      const box = document.getElementById("org-scope-options");
+      if (!box) return;
+      const sel = pendingOrgSelection || [];
+      const allTicked = sel.includes("ALL") || sel.length === 0;
+
+      const row = (value, text, ticked, sub) => `
+        <label class="flex items-start gap-2.5 px-3 py-1.5 hover:bg-[#1f1745] cursor-pointer transition-colors">
+          <input type="checkbox" value="${value}" ${ticked ? "checked" : ""}
+                 onchange="onOrgOptionToggle(this)"
+                 class="mt-0.5 w-3.5 h-3.5 rounded accent-[#915EFF] cursor-pointer shrink-0">
+          <span class="min-w-0">
+            <span class="block text-[11.5px] font-semibold text-[#e2e8f0] truncate">${text}</span>
+            ${sub ? `<span class="block text-[10px] text-[#8b84b8]">${sub}</span>` : ""}
+          </span>
+        </label>`;
+
+      let html = row("ALL", "All EMEA", allTicked, "Everyone in the EMEA delivery pool");
+      html += `<div class="my-1 border-t border-[#2a2356]"></div>`;
+      orgOptionsCache.forEach(o => {
+        html += row(
+          o.ldap,
+          o.headcount ? `${o.name} (${o.headcount})` : o.name,
+          !allTicked && sel.includes(o.ldap),
+          o.ldap
+        );
+      });
+      box.innerHTML = html;
+    }
+
+    // Ticking "All EMEA" clears the individual picks and vice versa: "All" is a
+    // superset, so the backend would ignore the others anyway. Making that
+    // visible avoids a selection that silently does nothing.
+    function onOrgOptionToggle(cb) {
+      let sel = (pendingOrgSelection || []).slice();
+      if (cb.value === "ALL") {
+        sel = cb.checked ? ["ALL"] : [];
+      } else {
+        sel = sel.filter(v => v !== "ALL");
+        if (cb.checked) {
+          if (!sel.includes(cb.value)) sel.push(cb.value);
+        } else {
+          sel = sel.filter(v => v !== cb.value);
+        }
+      }
+      pendingOrgSelection = sel;
+      renderOrgOptions();
+      updateOrgScopeLabel();
+    }
+    window.onOrgOptionToggle = onOrgOptionToggle;
+
+    function toggleOrgScopeMenu(evt) {
+      if (evt) evt.stopPropagation();
+      const menu = document.getElementById("org-scope-menu");
+      if (!menu) return;
+      const opening = menu.classList.contains("hidden");
+      if (opening) {
+        // Start from whatever is currently applied.
+        pendingOrgSelection = orgScopeAsArray(getOrgScope());
+        if (!pendingOrgSelection.length) pendingOrgSelection = ["ALL"];
+        renderOrgOptions();
+        menu.classList.remove("hidden");
+      } else {
+        closeOrgScopeMenu();
+      }
+    }
+    window.toggleOrgScopeMenu = toggleOrgScopeMenu;
+
+    function closeOrgScopeMenu() {
+      const menu = document.getElementById("org-scope-menu");
+      if (menu) menu.classList.add("hidden");
+      // Discard un-applied ticks so the button stops advertising a scope that
+      // is not actually in force.
+      pendingOrgSelection = null;
+      updateOrgScopeLabel();
+    }
+    window.closeOrgScopeMenu = closeOrgScopeMenu;
+
+    function resetOrgScopeSelection() {
+      pendingOrgSelection = ["ALL"];
+      renderOrgOptions();
+      updateOrgScopeLabel();
+    }
+    window.resetOrgScopeSelection = resetOrgScopeSelection;
+
+    function applyOrgScope() {
+      const sel = pendingOrgSelection || [];
+      const next = (!sel.length || sel.includes("ALL")) ? "ALL" : sel.join(",");
+      const menu = document.getElementById("org-scope-menu");
+      if (menu) menu.classList.add("hidden");
+
+      if (next === getOrgScope()) {   // nothing changed - don't re-query
+        pendingOrgSelection = null;
+        updateOrgScopeLabel();
+        return;
+      }
+      currentOrgLdap = next;
+      pendingOrgSelection = null;
+      try { localStorage.setItem(ORG_SCOPE_KEY, currentOrgLdap); } catch (e) {}
+      updateOrgScopeLabel();
+      // Changing scope re-runs the BigQuery query (~13-17s). Use the light
+      // filter overlay, NOT the full boot loader: the boot loader is reserved
+      // for the very first paint.
+      loadData();
+    }
+    window.applyOrgScope = applyOrgScope;
+
+    // Click-away closes the menu without applying.
+    document.addEventListener("click", (e) => {
+      const wrap = document.getElementById("org-scope-wrap");
+      const menu = document.getElementById("org-scope-menu");
+      if (!wrap || !menu || menu.classList.contains("hidden")) return;
+      if (!wrap.contains(e.target)) closeOrgScopeMenu();
+    });
+
     async function loadOrgOptions() {
-      const sel = document.getElementById("org-scope-select");
-      if (!sel) return;
       try {
         const token = (typeof window.getValidToken === 'function') ? window.getValidToken() : null;
         const headers = {};
@@ -2513,47 +2743,24 @@
         }
         const res = await fetch('/api/org-options', { headers });
         const json = await res.json();
-        const opts = json.options || [];
+        orgOptionsCache = json.options || [];
+
         const chosen = getOrgScope() || json.default || "";
+        if (currentOrgLdap === null && chosen) currentOrgLdap = chosen;
 
-        sel.innerHTML = "";
-        const allOpt = document.createElement("option");
-        allOpt.value = "ALL";
-        allOpt.textContent = "All EMEA";
-        sel.appendChild(allOpt);
-
-        opts.forEach(o => {
-          const el = document.createElement("option");
-          el.value = o.ldap;
-          el.textContent = o.headcount ? `${o.name} (${o.headcount})` : o.name;
-          sel.appendChild(el);
+        // A selected org can be missing from the list (a small org filtered out
+        // by min_headcount). Add it so the selection is never silently lost.
+        orgScopeAsArray(chosen).forEach(ldap => {
+          if (ldap !== "ALL" && !orgOptionsCache.some(o => o.ldap === ldap)) {
+            orgOptionsCache.push({ ldap, name: ldap, headcount: 0 });
+          }
         });
-
-        // The chosen org may be missing from the list (small org filtered out
-        // by min_headcount) - add it so the selection is never silently lost.
-        if (chosen && chosen !== "ALL" && !opts.some(o => o.ldap === chosen)) {
-          const el = document.createElement("option");
-          el.value = chosen;
-          el.textContent = chosen;
-          sel.appendChild(el);
-        }
-        sel.value = chosen || "ALL";
+        updateOrgScopeLabel();
+        renderOrgOptions();
       } catch (e) {
         console.warn("Could not load org options:", e);
       }
     }
-
-    function onOrgScopeChange() {
-      const sel = document.getElementById("org-scope-select");
-      if (!sel) return;
-      currentOrgLdap = sel.value;
-      try { localStorage.setItem(ORG_SCOPE_KEY, currentOrgLdap); } catch (e) {}
-      // Switching org re-runs the BigQuery query, so hold the screen rather
-      // than leaving the previous org's numbers on display while it loads.
-      forceBootNext = true;
-      loadData();
-    }
-    window.onOrgScopeChange = onOrgScopeChange;
     window.loadOrgOptions = loadOrgOptions;
 
     // Make the data source unmistakable. The dashboard previously said
@@ -2564,7 +2771,19 @@
       const label = document.getElementById("data-source-label");
       const dot = document.getElementById("live-week-dot");
 
-      if (label) label.textContent = isLive ? "Live Delivery Pool" : "CACHED DATA \u2014 not live";
+      // The "Live Delivery Pool" text was removed from the header to save
+      // space, so while live this span stays empty and hidden. When the data is
+      // NOT live we still must shout about it, so the span is revealed and
+      // given its separator back.
+      if (label) {
+        if (isLive) {
+          label.textContent = "";
+          label.classList.add("hidden");
+        } else {
+          label.textContent = "CACHED DATA \u2014 not live \u2022 ";
+          label.classList.remove("hidden");
+        }
+      }
       if (dot) dot.style.background = isLive ? "#00cea8" : "#f59e0b";
 
       // The headline hours figure describes exactly one week. Name that week
@@ -2676,16 +2895,25 @@
       const syncBtn = document.getElementById("btn-sync-bq");
       const origHtml = syncBtn ? syncBtn.innerHTML : "";
 
-      // Hold the whole screen only for the genuinely slow paths. A date-filter
-      // tweak keeps the thin top bar instead of flashing the overlay.
-      const useBootLoader = (!hasLoadedOnce || syncBq === true || forceBootNext);
+      // The full-screen boot loader is for the FIRST PAINT ONLY. Re-running the
+      // query for a scope change or a date filter keeps the dashboard on screen
+      // behind the light overlay instead of tearing it down. (forceBootNext is
+      // still honoured so an explicit caller can demand the full loader, but
+      // the org picker no longer sets it.)
+      const useBootLoader = (!hasLoadedOnce || forceBootNext);
       forceBootNext = false;
       if (useBootLoader) {
-        const orgSel = document.getElementById("org-scope-select");
-        const orgLabel = (orgSel && orgSel.selectedIndex >= 0)
-          ? (orgSel.options[orgSel.selectedIndex].textContent || "").trim()
+        const orgLabel = (typeof orgScopeLabelText === "function")
+          ? orgScopeLabelText(orgScopeAsArray(getOrgScope()))
           : "";
         showBootLoader(orgLabel ? `Loading ${orgLabel}` : "Connecting to BigQuery");
+      } else {
+        showFilterLoader(
+          syncBq ? "Syncing BigQuery" : "Updating dashboard",
+          syncBq
+            ? "Pulling the latest delivery & pipeline tables"
+            : "Re-querying for the selected scope \u2014 a few seconds"
+        );
       }
 
       showTopLoadingBar();
@@ -2783,16 +3011,15 @@
 
         renderDataSourceBanner(globalData);
 
-        // Reflect the scope the backend actually applied, and (re)populate the
+        // Reflect the scope the backend actually applied, and populate the
         // picker on first load.
         if (globalData.org_ldap && currentOrgLdap === null) {
           currentOrgLdap = globalData.org_ldap === "ALL" ? "ALL" : globalData.org_ldap;
         }
-        const orgSel = document.getElementById("org-scope-select");
-        if (orgSel && (!orgSel.options.length || orgSel.options[0].value === "")) {
-          loadOrgOptions();
-        } else if (orgSel && globalData.org_ldap) {
-          orgSel.value = globalData.org_ldap;
+        if (!orgOptionsCache.length) {
+          loadOrgOptions();          // async; refreshes the label when it lands
+        } else {
+          updateOrgScopeLabel();
         }
         renderPipelineScopeNotice();
         // Payload is in; everything from here is local post-processing.
@@ -2870,6 +3097,8 @@
           // Small beat so the entrance animation is already running behind
           // the fade instead of popping in afterwards.
           setTimeout(hideBootLoader, 180);
+        } else {
+          hideFilterLoader();
         }
         if (syncBq && syncBtn) {
           setTimeout(() => {
@@ -3177,9 +3406,10 @@
 
         // Label by the real hub split. This previously always read
         // "N EMEA Delivery" even when every person on the account is GSD.
+        // The non-GSD pool is labelled PSO to match the Customer Portfolio tab.
         const hubLabel = (emeaCount && gsdCount)
-          ? `${emeaCount} EMEA &bull; ${gsdCount} GSD`
-          : (gsdCount ? `${gsdCount} GSD Delivery` : `${emeaCount} EMEA Delivery`);
+          ? `${emeaCount} PSO &bull; ${gsdCount} GSD`
+          : (gsdCount ? `${gsdCount} GSD Delivery` : `${emeaCount} PSO Delivery`);
         let pillsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${hubLabel}</span>`;
 
         const safeAcc = c.account_name.replace(/'/g, "\\'");
@@ -3299,7 +3529,13 @@
       }
       animateCounter("kpi-staffed-count", fullStaffed);
       if (document.getElementById("kpi-staffed-pct")) {
-        document.getElementById("kpi-staffed-pct").textContent = `${Math.round((fullStaffed / (resources.length || 1)) * 100)}% Dedicated`;
+        // This is simply the headline count expressed as a share of the whole
+        // roster - NOT a measure of how "dedicated" anyone is. The old wording
+        // ("80% Dedicated") read as an allocation depth figure, which it isn't.
+        const staffedShare = Math.round((fullStaffed / (resources.length || 1)) * 100);
+        const el = document.getElementById("kpi-staffed-pct");
+        el.textContent = `${staffedShare}% of team`;
+        el.title = `${fullStaffed} of ${resources.length} people are at 85%+ of their weekly capacity`;
       }
       animateCounter("kpi-bench-count", benchCount);
       if (document.getElementById("kpi-bench-label")) {
@@ -3866,6 +4102,9 @@
           });
 
           if (riskF === "Staffed" && !isPersonStaffed) return;
+          // ">100%" uses the UNCLAMPED percentage so genuine over-allocation
+          // is visible; personEffPct is capped at 100 and would never match.
+          if (riskF === "Over" && !isPersonOver) return;
           if (riskF === "Partial" && !isPersonPartial) return;
           if (riskF === "Bench / Free" && !isPersonBench) return;
           if (riskF === "Overdue" && !hasOverdue) return;
@@ -4077,13 +4316,17 @@
         
         const projects = c.projects || [];
 
-        // Account owner: the real engagement_manager from the source. There is
-        // no "delivery executive" column anywhere, so this is labelled EM, not
-        // DE. Empty means genuinely unassigned at source.
-        // The backend now resolves the source LDAP against the full ~3k-person
-        // directory, so this is already a real name. It only stays an LDAP when
-        // that person has no row in the delivery resource table (e.g. a
-        // sales-side EM) - still a real identifier, never an invented name.
+        // Account owner shown on the card is now the DELIVERY EXECUTIVE.
+        // There is no "delivery_executive" column in the source; the backend
+        // derives it (see the account_de CTE) by taking the account's
+        // engagement_manager when that person holds role='Delivery Executive',
+        // and otherwise the DE actually staffed on the account. "" for the 16
+        // of 30 accounts with no DE signal at all.
+        const deName = c.delivery_executive || "";
+        const deLdap = c.delivery_executive_ldap || "";
+        // Engagement manager is still in the payload and still searchable, but
+        // it is no longer the headline: it is project-level, so it changes as
+        // the org scope widens, which made it a misleading account owner.
         const emName = c.engagement_manager || "";
         const emLdap = c.engagement_manager_ldap || "";
         // Project managers actually on this account's in-scope projects.
@@ -4091,10 +4334,13 @@
           projects.map(p => p.project_manager).filter(Boolean)
         )];
 
-        // Search filter matching on Account, EM, PM, project, or staffed people
+        // Search filter matching on Account, DE, EM, PM, project or staffed people
         if (q) {
           const matchAccount = c.account_name.toLowerCase().includes(q);
-          const matchDE = emName.toLowerCase().includes(q) || emLdap.toLowerCase().includes(q);
+          // Match the displayed DE and the (still-present, no longer displayed)
+          // engagement manager, so an older search term keeps working.
+          const matchDE = [deName, deLdap, emName, emLdap]
+            .some(v => (v || "").toLowerCase().includes(q));
           const matchPgM = pmNames.some(n => n.toLowerCase().includes(q));
           const matchProj = projects.some(p => (p.project_name || "").toLowerCase().includes(q));
           let matchPeople = false;
@@ -4111,7 +4357,12 @@
         const card = document.createElement("div");
         card.className = "bg-white border border-slate-200/90 hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5 rounded-2xl p-5 flex flex-col gap-3.5 transition-all duration-200 shadow-2xs";
 
-        let peoplePills = "";
+        // Staffed team, collected PER REGION so the two pools can be shown
+        // separately. The internal key is still "EMEA" (that is what the
+        // backend's hub field says) but it is LABELLED "PSO", which is what the
+        // business calls it - "EMEA" was meaningless next to "GSD", since GSD
+        // people are in EMEA too.
+        const pillsByRegion = { GSD: "", EMEA: "" };
         ["GSD", "EMEA"].forEach(reg => {
           (c[reg] || []).forEach(p => {
             let pct = p.allocation_pct;
@@ -4150,16 +4401,59 @@
             const pctTitle = pct > 100
               ? `${p.name} is booked beyond a full week in total - this account alone takes ${pct}% of their capacity`
               : `${pct}% of ${p.name}'s weekly capacity is on this account`;
-            peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition" title="${pctTitle}">${p.name} <span class="text-[10px] ${pctColor} font-bold">(${pct}%)</span>${pHrsLabel}</span>`;
+            pillsByRegion[reg] += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition" title="${pctTitle}">${p.name} <span class="text-[10px] ${pctColor} font-bold">(${pct}%)</span>${pHrsLabel}</span>`;
           });
         });
 
-        // Account-level owner badge. Honest labelling: the source column is
-        // engagement_manager, so it says EM. The old code rendered a "DE:"
-        // badge containing the hardcoded literal "Delivery Executive".
-        let leadershipBadges = emName
-          ? `<span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Engagement Manager (projects.engagement_manager${emLdap ? ' = ' + emLdap : ''}) - the account-level owner in the source. There is no Delivery Executive field.">👔 <strong class="text-indigo-900 font-extrabold">EM:</strong> ${emName}</span>`
-          : `<span class="text-[10px] text-slate-400 font-medium bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-lg" title="projects.engagement_manager is empty for every in-scope project on this account">EM: Unassigned</span>`;
+        // Show the two pools separately ONLY when the account genuinely has
+        // both. Under a single-org scope (e.g. Ashutosh Gupta) everyone is GSD,
+        // so a "GSD" header on its own would be noise; that case falls through
+        // to the flat list. No data is filtered either way - this is purely how
+        // the same people are grouped.
+        const gsdCount = (c.GSD || []).length;
+        const psoCount = (c.EMEA || []).length;
+        const splitTeam = gsdCount > 0 && psoCount > 0;
+
+        const teamGroup = (label, count, colour, pills, help) => `
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="${colour} text-[10px] font-bold px-2 py-0.5 rounded-md shadow-2xs">${label}</span>
+              <span class="text-[10px] text-slate-400 font-semibold">${count} ${count === 1 ? "person" : "people"}</span>
+              <span class="text-[10px] text-slate-300 cursor-help" title="${help}">&#9432;</span>
+            </div>
+            <div class="flex flex-wrap gap-2">${pills}</div>
+          </div>`;
+
+        let peoplePills;
+        if (splitTeam) {
+          peoplePills =
+            teamGroup(
+              "PSO", psoCount,
+              "bg-blue-50 text-blue-700 border border-blue-200/80",
+              pillsByRegion.EMEA,
+              "PSO delivery consultants in the regional practice."
+            ) +
+            `<div class="my-3 border-t border-dashed border-slate-300"></div>` +
+            teamGroup(
+              "GSD", gsdCount,
+              "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
+              pillsByRegion.GSD,
+              "Global Service Delivery - the dedicated delivery centre pool (cost centre CC1)."
+            );
+        } else {
+          peoplePills = `<div class="flex flex-wrap gap-2">${pillsByRegion.GSD}${pillsByRegion.EMEA}</div>`;
+        }
+
+        // Account-level owner badge: Delivery Executive.
+        // The tooltip spells out the derivation, because unlike PM this is NOT
+        // a single source column - it is inferred, and the user should be able
+        // to see which of the two signals produced the name.
+        const deTitle = deName
+          ? `Delivery Executive for this account. Derived: the account's engagement_manager where that person's role is "Delivery Executive", otherwise the Delivery Executive staffed on the account (most hours over the last 13 weeks).${deLdap ? " ldap: " + deLdap : ""}`
+          : "";
+        let leadershipBadges = deName
+          ? `<span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="${deTitle}">👔 <strong class="text-indigo-900 font-extrabold">DE:</strong> ${deName}</span>`
+          : `<span class="text-[10px] text-slate-400 font-medium bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-lg" title="No Delivery Executive could be identified for this account: nobody with role 'Delivery Executive' is named as its engagement_manager, and none is staffed on it. This is true for 16 of 30 accounts.">DE: Unassigned</span>`;
 
         if (pmNames.length) {
           const pmLabel = pmNames.length === 1 ? pmNames[0] : `${pmNames.length} PMs`;
@@ -4215,12 +4509,14 @@
              </div>`
           : ``;
 
-        // Region summary counts - by real hub, not a hardcoded "EMEA" label.
+        // Hub summary counts - by real hub, not a hardcoded "EMEA" label.
+        // The non-GSD hub is labelled PSO (the EMEA PSO org), which is what
+        // the business calls it; "EMEA" was misleading since GSD serves EMEA too.
         const pEmea = (c.EMEA || []).length;
         const pGsd = (c.GSD || []).length;
         const pHubLabel = (pEmea && pGsd)
-          ? `${pEmea} EMEA &bull; ${pGsd} GSD`
-          : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} EMEA Delivery`);
+          ? `${pEmea} PSO &bull; ${pGsd} GSD`
+          : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} PSO Delivery`);
         let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${pHubLabel}</span>`;
 
         // Fallback sums each member's real capacity from the source rather
@@ -4247,9 +4543,9 @@
               ${regCountsHtml}
             </div>
           </div>
-          <div class="flex flex-wrap gap-2 pt-1">
-            <span class="text-[11px] text-slate-400 font-medium py-1">Staffed Team:</span>
-            ${peoplePills || '<span class="text-xs text-slate-400 italic py-1">No active allocations</span>'}
+          <div class="pt-1">
+            <span class="text-[11px] text-slate-400 font-medium block mb-1.5">Staffed Team:</span>
+            ${(gsdCount + psoCount) > 0 ? peoplePills : '<span class="text-xs text-slate-400 italic py-1">No active allocations</span>'}
           </div>
           ${projectSection}
         `;
@@ -5833,7 +6129,7 @@
                   ${SUPPORT_EMAIL}
                 </div>
                 <div class="text-[11px] text-slate-500 mt-0.5">
-                  Shubham Pathak &bull; EMEA Delivery &amp; Staffing 360
+                  Shubham Pathak &bull; EMEA Delivery 360
                 </div>
               </div>
               <div class="flex items-center gap-2">

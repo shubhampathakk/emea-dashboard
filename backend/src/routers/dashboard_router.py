@@ -59,13 +59,28 @@ def _is_auth_error(exc: Exception) -> bool:
 
 
 def resolve_org_ldap(value: Optional[str]) -> Optional[str]:
-    """None/'' -> the default org. 'ALL' -> no org filter."""
+    """Normalise the org-scope selection.
+
+    Accepts a single ldap or a comma-separated list (the scope picker is a
+    multi-select). Returns a comma-separated, de-duplicated, lowercased string
+    that query_emea_delivery_data() splits again, or None for "no org filter".
+
+      None / ''                -> the default org
+      'ALL' (anywhere in list) -> None, i.e. the whole EMEA pool
+      'a,b,a'                  -> 'a,b'
+    """
     v = (value or "").strip()
     if not v:
         return DEFAULT_ORG_LDAP
-    if v.lower() == "all":
+    tokens = [t.strip().lower() for t in v.split(",")]
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        return DEFAULT_ORG_LDAP
+    # "All EMEA" is a superset of any individual leader, so if it is ticked the
+    # other selections cannot narrow anything and are ignored.
+    if any(t == "all" for t in tokens):
         return None
-    return v.lower()
+    return ",".join(dict.fromkeys(tokens))
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -171,6 +186,10 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         engm_ldap = (row.get("pso_engineering_manager_ldap") or "").strip()
         pm_person = (row.get("project_manager") or "").strip()
         pm_person_ldap = (row.get("project_manager_ldap") or "").strip()
+        # Account-level Delivery Executive, derived in SQL. "" for the 16 of 30
+        # accounts with no DE signal at all - the UI must say "Unassigned".
+        de_name = (row.get("delivery_executive") or "").strip()
+        de_ldap = (row.get("delivery_executive_ldap") or "").strip()
 
         # Assignment-level hours ONLY. This must not fall back to the person's
         # total hours: doing so invented a phantom "Delivery Project" for every
@@ -257,6 +276,11 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                     # string "Delivery Executive" on all 30 accounts.
                     "engagement_manager": "",
                     "engagement_manager_ldap": "",
+                    # Account owner shown in the UI. Derived - see the
+                    # account_de CTE. "" means no DE signal exists for this
+                    # account, which is true for 16 of 30.
+                    "delivery_executive": "",
+                    "delivery_executive_ldap": "",
                     "engineering_managers": [],
                     "total_hours": 0.0,
                     "projects": [],
@@ -268,6 +292,9 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             if em_name and not acct["engagement_manager"]:
                 acct["engagement_manager"] = em_name
                 acct["engagement_manager_ldap"] = em_ldap
+            if de_name and not acct["delivery_executive"]:
+                acct["delivery_executive"] = de_name
+                acct["delivery_executive_ldap"] = de_ldap
             if engm_name and engm_name not in acct["engineering_managers"]:
                 acct["engineering_managers"].append(engm_name)
 
