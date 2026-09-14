@@ -188,7 +188,14 @@ def query_emea_delivery_data(
       -- average as if it were a single week's allocation.
       SELECT
         resource_id,
-        ROUND(SUM(scheduled_timecard_hours_net), 1) AS scheduled_timecard_hours
+        ROUND(SUM(scheduled_timecard_hours_net), 1) AS scheduled_timecard_hours,
+        -- REAL weekly capacity, straight from the source. We used to infer this
+        -- from the role string and gave 16h to anything starting with
+        -- "manager". That was invented: every "Manager (Billable CON/SCE)" in
+        -- this org has work_hours = 40 and is scheduled ~39h of delivery. The
+        -- bad 16h denominator made a 20h project read as "100% allocated".
+        -- Observed values here are only 40 (78 people) and 37.5 (1 person).
+        ROUND(SUM(work_hours), 1) AS work_hours
       FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
       WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
         AND timecard_week_ending = (SELECT wk FROM anchor)
@@ -273,6 +280,9 @@ def query_emea_delivery_data(
       r.practice,
       r.is_ooo,
       COALESCE(cl.scheduled_timecard_hours, 0.0) AS scheduled_timecard_hours,
+      -- Real weekly capacity for this person. NULL only if they have no row in
+      -- the anchor week; the payload builder falls back to 40 in that case.
+      cl.work_hours AS work_hours,
       CAST((SELECT wk FROM anchor) AS STRING) AS week_ending,
       a.project_id,
       a.assignment_id,

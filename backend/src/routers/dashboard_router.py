@@ -86,8 +86,32 @@ STANDARD_WEEKLY_CAPACITY = 40.0
 
 
 def standard_capacity(role: Optional[str]) -> float:
-    """Weekly billable capacity for a role. People managers carry a reduced load."""
+    """LAST-RESORT weekly capacity guess, used only when the source has no
+    work_hours for this person (i.e. no row in the anchor week).
+
+    This used to be the primary rule and gave 16h to any role starting with
+    "manager". It was wrong. In this org every "Manager (Billable CON/SCE)"
+    has work_hours = 40 in the source and is scheduled ~39h of real delivery,
+    so the 16h denominator turned a normal 20h project into "100% allocated"
+    and capped their visible load at 16h. Prefer capacity_from_row().
+    """
     return MANAGER_WEEKLY_CAPACITY if str(role or "").strip().lower().startswith("manager") else STANDARD_WEEKLY_CAPACITY
+
+
+def capacity_from_row(row: Dict[str, Any]) -> float:
+    """This person's real weekly capacity, from the source.
+
+    work_hours is the contracted availability for the week (40, or 37.5 for
+    part-time). Falls back to the role guess only when it is missing, and
+    rejects absurd values so a data glitch cannot silently divide by ~0.
+    """
+    try:
+        wh = float(row.get("work_hours") or 0)
+    except (ValueError, TypeError):
+        wh = 0.0
+    if 0 < wh <= 80:
+        return wh
+    return standard_capacity(row.get("role"))
 
 
 def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -156,8 +180,12 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             except Exception:
                 runway_days = None
 
-        cap = standard_capacity(role)
-        alloc_pct = min(100, round((hrs / cap) * 100)) if cap > 0 else 0
+        cap = capacity_from_row(row)
+        # TRUE share of this person's week, not clamped to 100. Clamping here
+        # meant that someone with three projects at 20h/20h/16h against a
+        # (wrongly inferred) 16h capacity showed "100%" on all three, which
+        # read as "fully allocated to each customer" in the portfolio.
+        alloc_pct = round((hrs / cap) * 100) if cap > 0 else 0
 
         # Key by resource_id, not display name: two people who share a full
         # name would otherwise be merged into one record, silently dropping
@@ -218,11 +246,14 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             existing_p = next((p for p in customer_map[acc_name][hub_key] if p["name"] == res_name), None)
             if existing_p:
                 existing_p["hours"] = round(existing_p.get("hours", 0.0) + hrs, 1)
-                # "hours" here is a WEEKLY figure, divided by this person's
-                # weekly capacity (16h for managers, 40h otherwise).
-                existing_p["allocation_pct"] = min(100, max(0, round((existing_p["hours"] / cap) * 100))) if cap > 0 else 0
+                # "hours" here is a WEEKLY figure, divided by this person's real
+                # weekly capacity from the source. NOT clamped to 100: this is
+                # the share of their week that this ONE customer takes, and
+                # clamping made every multi-customer person look 100% dedicated
+                # to each of them.
+                existing_p["allocation_pct"] = max(0, round((existing_p["hours"] / cap) * 100)) if cap > 0 else 0
             else:
-                p_pct = min(100, max(0, round((hrs / cap) * 100))) if hrs > 0 and cap > 0 else 0
+                p_pct = max(0, round((hrs / cap) * 100)) if hrs > 0 and cap > 0 else 0
                 customer_map[acc_name][hub_key].append({
                     "name": res_name,
                     "ldap": ldap,
@@ -243,14 +274,19 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         c["total_hours"] = round(c["total_hours"], 1)
         for hub_k in ["EMEA", "GSD"]:
             for p in c.get(hub_k, []):
-                # Each person's own capacity: 16h for managers, 40h otherwise.
-                # Previously these three denominators were hardcoded to 40.0,
-                # which understated every manager's allocation on an account.
+                # Each person's own weekly capacity, taken from the source
+                # (work_hours: 40, or 37.5 part-time). Previously these three
+                # denominators were hardcoded to 40.0, then briefly to a role
+                # guess that invented a 16h week for managers.
                 p_cap = float(p.get("capacity_hours") or 40.0) or 40.0
                 if p.get("allocation_pct") is None or p.get("allocation_pct") == 0:
                     pHrs = p.get("hours", 0.0)
+                    # Not clamped to 100: this is the share of the person's week
+                    # that THIS ONE account takes. Clamping made somebody split
+                    # 20h/20h/16h across three projects read as "100% allocated"
+                    # to every one of their customers.
                     if pHrs > 0:
-                        p["allocation_pct"] = min(100, round((pHrs / p_cap) * 100))
+                        p["allocation_pct"] = round((pHrs / p_cap) * 100)
                     elif p["name"] in resource_by_name:
                         r_match = resource_by_name[p["name"]]
                         r_cap = float(r_match.get("capacity_hours") or p_cap) or p_cap
@@ -258,9 +294,10 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                         if acc_ass:
                             sum_hrs = sum(a.get("weekly_hours", 0.0) for a in acc_ass)
                             p["hours"] = round(sum_hrs, 1)
-                            p["allocation_pct"] = min(100, round((sum_hrs / r_cap) * 100))
-                        elif r_match.get("weekly_hours", 0.0) > 0:
-                            p["allocation_pct"] = min(100, round((r_match["weekly_hours"] / r_cap) * 100))
+                            p["allocation_pct"] = round((sum_hrs / r_cap) * 100)
+                        elif r_match.get("scheduled_hours_uncapped", r_match.get("weekly_hours", 0.0)) > 0:
+                            r_raw = float(r_match.get("scheduled_hours_uncapped") or r_match.get("weekly_hours") or 0.0)
+                            p["allocation_pct"] = round((r_raw / r_cap) * 100)
 
 
     valid_customers = {}

@@ -2405,32 +2405,41 @@
     //  * No role in the source data is ever the bare string "Manager" - real
     //    values look like "Manager (Billable CON/SCE)" or "DC Architect - India".
     //    Every `r.role === "Manager"` check was therefore dead code.
-    //  * Allocation percentages were frequently uncapped, producing >100%.
     //  * `new Date("YYYY-MM-DD")` parses as UTC but `parseDateUTC(s)`
     //    parses as local time, giving off-by-one day counts.
     // ---------------------------------------------------------------------
-    // Reduced capacity applies to *people managers* who still carry billable
-    // work ("Manager (Billable CON/SCE)"). It must NOT match job families that
-    // merely contain the word manager, e.g. "Technical Account Manager".
-    // This rule is kept identical to standard_capacity() in dashboard_router.py.
-    const MANAGER_WEEKLY_CAPACITY = 16;
+    // A person's real weekly capacity comes from the source (work_hours on
+    // scheduled_vs_actual_utilization: 40, or 37.5 part-time) and is passed
+    // through by the backend as capacity_hours. The 40 below is only a
+    // last-resort default for a record that arrived without it.
+    //
+    // There used to be a rule here giving 16h to any role starting with
+    // "manager". It was invented, not sourced, and it is why a "Manager
+    // (Billable CON/SCE)" staffed 20h on one project showed as 100%
+    // allocated to it - and 100% again on the next one.
     const STANDARD_WEEKLY_CAPACITY = 40;
 
     function capacityFor(roleOrResource) {
       if (roleOrResource && typeof roleOrResource === 'object') {
-        if (roleOrResource.capacity_hours) return roleOrResource.capacity_hours;
-        roleOrResource = roleOrResource.role;
+        const cap = Number(roleOrResource.capacity_hours);
+        if (isFinite(cap) && cap > 0 && cap <= 80) return cap;
       }
-      return String(roleOrResource || '').trim().toLowerCase().startsWith('manager')
-        ? MANAGER_WEEKLY_CAPACITY
-        : STANDARD_WEEKLY_CAPACITY;
+      return STANDARD_WEEKLY_CAPACITY;
     }
 
-    // Weekly hours -> capped 0..100 percentage against that person's capacity.
+    // Weekly hours -> TRUE percentage of that person's week. Deliberately NOT
+    // capped at 100: someone scheduled 56h against a 40h week is 140%
+    // allocated and the dashboard needs to say so. Clamp at the point where
+    // you draw a progress bar (see clampBar), never at the number itself.
     function allocPctOf(weeklyHours, roleOrResource) {
       const cap = capacityFor(roleOrResource);
       if (!cap || !isFinite(weeklyHours)) return 0;
-      return Math.max(0, Math.min(100, Math.round((weeklyHours / cap) * 100)));
+      return Math.max(0, Math.round((weeklyHours / cap) * 100));
+    }
+
+    // Width for a progress bar, which physically cannot exceed its track.
+    function clampBar(pct) {
+      return Math.max(0, Math.min(100, Number(pct) || 0));
     }
 
     // Parse a YYYY-MM-DD string as a UTC midnight date (no timezone drift).
@@ -2983,8 +2992,9 @@
           }
         } else {
           if (allocPct > 0 && allocPct < 100) {
-            // Against this person's own capacity, not a flat 40h: a manager
-            // on 10 of their 16 hours has 6 free, not 30.
+            // Against this person's own capacity from the source, not a flat
+            // 40h. allocPct is uncapped, so anyone already booked past their
+            // week (>= 100) correctly drops out of "available capacity".
             const availHrs = Math.max(0, capacityFor(r) - Math.round(rHours));
             const freePct = Math.max(0, 100 - allocPct);
             list.push({
@@ -3843,17 +3853,34 @@
           const stdCap = capacityFor(r);
           const halfCap = stdCap / 2;
 
-          // Compute Person's Total Combined ACTIVE Delivery Hours
-          let personTotalDeliveryHrs = (r.weekly_hours !== undefined && r.weekly_hours !== null)
-            ? Number(r.weekly_hours)
-            : activeDelivery.reduce((acc, a) => acc + assignmentWeeklyHours(a), 0);
-          personTotalDeliveryHrs = Math.min(stdCap, personTotalDeliveryHrs);
+          // Person's TOTAL combined ACTIVE delivery hours for the week.
+          //
+          // Prefer the sum of the assignments we are about to render, so the
+          // "N entries - Xh total" badge always equals the rows underneath it.
+          // Fall back to the backend figure only when there is nothing to sum.
+          // Use scheduled_hours_uncapped, not weekly_hours: the backend clamps
+          // weekly_hours to capacity so the org utilisation KPI stays <= 100%,
+          // but a staffing manager needs to see the real booking.
+          //
+          // This is NOT capped at stdCap any more. Capping it meant someone
+          // booked 20h + 20h + 16h displayed "40h total / 100% Staffed" and
+          // looked perfectly loaded, when they are in fact 16h over.
+          const personBackendHrs = (r.scheduled_hours_uncapped !== undefined && r.scheduled_hours_uncapped !== null)
+            ? Number(r.scheduled_hours_uncapped)
+            : Number(r.weekly_hours);
+          let personTotalDeliveryHrs = activeDelivery.length
+            ? activeDelivery.reduce((acc, a) => acc + assignmentWeeklyHours(a), 0)
+            : (isFinite(personBackendHrs) ? personBackendHrs : 0);
 
-          let personRawPct = stdCap > 0 ? (personTotalDeliveryHrs / stdCap) * 100 : 0;
-          let personEffPct = Math.min(100, Math.round(personRawPct));
-          let personEffHrs = personTotalDeliveryHrs;
+          // personRawPct is the truth (can exceed 100). personEffPct is the
+          // capped view used to partition the roster into bench/partial/staffed
+          // and to size progress bars.
+          let personRawPct = stdCap > 0 ? Math.round((personTotalDeliveryHrs / stdCap) * 100) : 0;
+          let personEffPct = Math.min(100, personRawPct);
+          let personEffHrs = Math.min(stdCap, personTotalDeliveryHrs);
 
           const isPersonBench = (activeDelivery.length === 0 || personEffPct === 0 || personTotalDeliveryHrs === 0);
+          const isPersonOver = (!isPersonBench && personRawPct > 100);
           const isPersonStaffed = (!isPersonBench && personEffPct >= 85);
           const isPersonPartial = (!isPersonBench && personEffPct < 85);
           const personAvailPct = isPersonBench ? 100 : (isPersonStaffed ? 0 : Math.max(0, 100 - personEffPct));
@@ -3902,9 +3929,14 @@
 
             if (!matchQ) return;
 
+            // Per-row hours are the hours booked on THIS project. They used to
+            // be clamped to the person's whole-week capacity and the percentage
+            // clamped to 100, so a person split 20h/20h/16h showed "100%" on
+            // every line and looked fully dedicated to each customer at once.
+            // Show the truth; clamp only the progress bar's width.
             let rawRowHrs = isPersonBench ? 0 : (a.weekly_hours !== undefined ? a.weekly_hours : ((a.hours || 0) * 5));
-            let rowWeeklyHrs = Math.min(stdCap, rawRowHrs);
-            let rowAllocPct = isPersonBench ? 0 : Math.min(100, Math.round((rowWeeklyHrs / stdCap) * 100));
+            let rowWeeklyHrs = rawRowHrs;
+            let rowAllocPct = (isPersonBench || stdCap <= 0) ? 0 : Math.round((rowWeeklyHrs / stdCap) * 100);
 
             let runwayDays = 999;
             if (a.runway_days !== undefined && a.runway_days !== null) {
@@ -3927,6 +3959,10 @@
             let statusBadge = `<span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 100% Staffed</span>`;
             if (isPersonBench) {
               statusBadge = `<span class="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-rose-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> Bench (0h)</span>`;
+            } else if (isPersonOver) {
+              // Booked beyond their contracted week. Previously indistinguishable
+              // from a healthy "100% Staffed", which hid every over-booking.
+              statusBadge = `<span class="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-purple-200/80 shadow-2xs" title="Scheduled ${personTotalDeliveryHrs.toFixed(0)}h against a ${stdCap}h week (${(personTotalDeliveryHrs - stdCap).toFixed(0)}h over)"><span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> ${personRawPct}% Over-allocated</span>`;
             } else if (isPersonPartial) {
               statusBadge = `<span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> ${personEffPct}% (${personAvailPct}% Avail)</span>`;
             }
@@ -3975,14 +4011,14 @@
                   </div>
                 </div>`
               : `<div>
-                  <span class="font-bold text-slate-900 text-xs">${rowAllocPct}% <span class="text-[10px] text-slate-400 font-normal">(${rowWeeklyHrs.toFixed(0)}h)</span></span>
+                  <span class="font-bold ${isPersonOver ? 'text-purple-700' : 'text-slate-900'} text-xs">${rowAllocPct}% <span class="text-[10px] text-slate-400 font-normal">(${rowWeeklyHrs.toFixed(0)}h)</span></span>
                   <div class="w-16 bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
-                    <div class="${rowAllocPct >= 85 ? 'bg-emerald-500' : 'bg-amber-500'} h-1 rounded-full" style="width: ${rowAllocPct}%"></div>
+                    <div class="${isPersonOver ? 'bg-purple-500' : (rowAllocPct >= 85 ? 'bg-emerald-500' : 'bg-amber-500')} h-1 rounded-full" style="width: ${clampBar(rowAllocPct)}%"></div>
                   </div>
                 </div>`;
 
             const multiProjIndicator = (!isPersonBench && activeDelivery.length > 1)
-              ? `<span class="bg-indigo-50 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded border border-indigo-150 inline-block mt-0.5">${activeDelivery.length} entries &bull; ${personTotalDeliveryHrs.toFixed(0)}h total</span>`
+              ? `<span class="${isPersonOver ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-indigo-50 text-indigo-700 border-indigo-150'} text-[9px] font-bold px-1.5 py-0.5 rounded border inline-block mt-0.5">${activeDelivery.length} entries &bull; ${personTotalDeliveryHrs.toFixed(0)}h total${isPersonOver ? ` / ${stdCap}h` : ''}</span>`
               : ``;
 
             tr.innerHTML = `
@@ -4112,8 +4148,20 @@
             if (pct === undefined || pct === null || isNaN(pct)) {
               pct = (p.hours ? allocPctOf(p.hours, p.capacity_hours ? p : (p.role || "")) : 0);
             }
-            pct = Math.max(0, Math.min(100, Math.round(pct)));
-            peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition">${p.name} <span class="text-[10px] text-indigo-600 font-bold">(${pct}%)</span></span>`;
+            // THIS is the number the user reported as wrong. It used to be
+            // Math.min(100, ...), so somebody giving Lloyds 36h of their 40h
+            // week and Unilever 20h showed "100%" on BOTH cards, reading as
+            // "fully dedicated to us" to two different account teams.
+            // Show the real share, and the hours so it can be checked.
+            pct = Math.max(0, Math.round(Number(pct) || 0));
+            const pHrsLabel = (p.hours !== undefined && p.hours !== null && p.hours > 0)
+              ? ` <span class="text-[10px] text-slate-400 font-normal">${Math.round(p.hours)}h</span>`
+              : ``;
+            const pctColor = pct > 100 ? 'text-purple-700' : 'text-indigo-600';
+            const pctTitle = pct > 100
+              ? `${p.name} is booked beyond a full week in total - this account alone takes ${pct}% of their capacity`
+              : `${pct}% of ${p.name}'s weekly capacity is on this account`;
+            peoplePills += `<span class="bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-2xs flex items-center gap-1.5 transition" title="${pctTitle}">${p.name} <span class="text-[10px] ${pctColor} font-bold">(${pct}%)</span>${pHrsLabel}</span>`;
           });
         });
 
@@ -4139,8 +4187,8 @@
           : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} EMEA Delivery`);
         let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${pHubLabel}</span>`;
 
-        // Fallback sums each member's real capacity rather than assuming 40h
-        // a head, which overstated any account staffed by a 16h manager.
+        // Fallback sums each member's real capacity from the source rather
+        // than assuming a flat 40h a head.
         const fallbackHours = (c.EMEA || []).concat(c.GSD || [])
           .reduce((acc, p) => acc + capacityFor(p), 0);
         const formattedHours = typeof c.total_hours === 'number'
@@ -4926,8 +4974,10 @@
             tag: tag,
             tagClass: tagClass,
             project: a.project || "—",
+            // Share of this person's week on THIS assignment. Not clamped to
+            // 100 - that made every row of a multi-project person read 100%.
             allocPct: (a.allocation_pct !== undefined && a.allocation_pct !== null)
-              ? Math.max(0, Math.min(100, Math.round(a.allocation_pct)))
+              ? Math.max(0, Math.round(a.allocation_pct))
               : allocPctOf(assignmentWeeklyHours(a), r),
             hrs: Math.round(assignmentWeeklyHours(a)),
             endDate: a.end || "—",
