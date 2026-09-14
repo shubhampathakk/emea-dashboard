@@ -2101,19 +2101,12 @@
     // "DE:" badge. Account ownership now comes from the source only:
     // projects.engagement_manager, surfaced as c.engagement_manager.
 
-    // Turn an LDAP from the source into something readable. The source gives us
-    // an LDAP (e.g. "janirudh"); if that person happens to be in the loaded
-    // roster we can show their full name, otherwise show the LDAP itself, which
-    // is still an unambiguous, real identifier. Never invents a name.
-    function resolveLdapName(ldap) {
-      if (!ldap) return "";
-      const key = String(ldap).split("@")[0].trim().toLowerCase();
-      if (!key) return "";
-      const hit = (globalData.resources || []).find(
-        r => String(r.ldap || "").toLowerCase() === key
-      );
-      return hit && hit.name ? hit.name : key;
-    }
+    // resolveLdapName() has been removed. It resolved an LDAP against
+    // globalData.resources, which only holds the ~86 people in the selected
+    // org, so almost every engagement manager (who sits outside this org)
+    // fell through to the raw lowercased LDAP. Resolution now happens in SQL
+    // against the full ~3k-person directory and arrives pre-resolved as
+    // c.engagement_manager, with c.engagement_manager_ldap kept alongside it.
 
     // ---------------------------------------------------------------
     // Full-screen boot loader
@@ -4087,8 +4080,12 @@
         // Account owner: the real engagement_manager from the source. There is
         // no "delivery executive" column anywhere, so this is labelled EM, not
         // DE. Empty means genuinely unassigned at source.
-        const emLdap = c.engagement_manager || "";
-        const emName = emLdap ? resolveLdapName(emLdap) : "";
+        // The backend now resolves the source LDAP against the full ~3k-person
+        // directory, so this is already a real name. It only stays an LDAP when
+        // that person has no row in the delivery resource table (e.g. a
+        // sales-side EM) - still a real identifier, never an invented name.
+        const emName = c.engagement_manager || "";
+        const emLdap = c.engagement_manager_ldap || "";
         // Project managers actually on this account's in-scope projects.
         const pmNames = [...new Set(
           projects.map(p => p.project_manager).filter(Boolean)
@@ -4161,7 +4158,7 @@
         // engagement_manager, so it says EM. The old code rendered a "DE:"
         // badge containing the hardcoded literal "Delivery Executive".
         let leadershipBadges = emName
-          ? `<span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Engagement Manager (projects.engagement_manager) - the account-level owner in the source. There is no Delivery Executive field.">👔 <strong class="text-indigo-900 font-extrabold">EM:</strong> ${emName}</span>`
+          ? `<span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Engagement Manager (projects.engagement_manager${emLdap ? ' = ' + emLdap : ''}) - the account-level owner in the source. There is no Delivery Executive field.">👔 <strong class="text-indigo-900 font-extrabold">EM:</strong> ${emName}</span>`
           : `<span class="text-[10px] text-slate-400 font-medium bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-lg" title="projects.engagement_manager is empty for every in-scope project on this account">EM: Unassigned</span>`;
 
         if (pmNames.length) {

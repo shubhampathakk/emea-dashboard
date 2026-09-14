@@ -162,8 +162,13 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         # Real people from the source. Empty string means genuinely unassigned;
         # these used to fall back to the invented strings "Delivery Lead" and
         # "PSO Lead", which rendered on screen as if they were real names.
-        em_ldap = (row.get("engagement_manager_name") or "").strip()
-        engm_ldap = (row.get("pso_engineering_manager") or "").strip()
+        # The source stores the EM / engineering manager as an LDAP; the SQL
+        # resolves it against the people directory and falls back to the raw
+        # ldap when the person is not in the delivery resource table.
+        em_name = (row.get("engagement_manager_name") or "").strip()
+        em_ldap = (row.get("engagement_manager_ldap") or "").strip()
+        engm_name = (row.get("pso_engineering_manager") or "").strip()
+        engm_ldap = (row.get("pso_engineering_manager_ldap") or "").strip()
         pm_person = (row.get("project_manager") or "").strip()
         pm_person_ldap = (row.get("project_manager_ldap") or "").strip()
 
@@ -251,6 +256,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                     # "Unassigned". This used to be the literal hardcoded
                     # string "Delivery Executive" on all 30 accounts.
                     "engagement_manager": "",
+                    "engagement_manager_ldap": "",
                     "engineering_managers": [],
                     "total_hours": 0.0,
                     "projects": [],
@@ -259,10 +265,11 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 }
 
             acct = customer_map[acc_name]
-            if em_ldap and not acct["engagement_manager"]:
-                acct["engagement_manager"] = em_ldap
-            if engm_ldap and engm_ldap not in acct["engineering_managers"]:
-                acct["engineering_managers"].append(engm_ldap)
+            if em_name and not acct["engagement_manager"]:
+                acct["engagement_manager"] = em_name
+                acct["engagement_manager_ldap"] = em_ldap
+            if engm_name and engm_name not in acct["engineering_managers"]:
+                acct["engineering_managers"].append(engm_name)
 
             # ---- project level -------------------------------------------
             # Group on project_id, NOT on project_name: project_name carries an
@@ -274,8 +281,9 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                     "project_name": base_proj_name,
                     "project_manager": pm_person,          # "" = unassigned at source
                     "project_manager_ldap": pm_person_ldap,
-                    "engagement_manager": em_ldap,
-                    "engineering_manager": engm_ldap,
+                    "engagement_manager": em_name,
+                    "engagement_manager_ldap": em_ldap,
+                    "engineering_manager": engm_name,
                     "start": start_date,
                     "end": end_date,
                     "total_hours": 0.0,

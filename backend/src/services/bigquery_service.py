@@ -276,8 +276,14 @@ def query_emea_delivery_data(
       -- Global ldap -> full name directory (~3k people, all regions), used to
       -- resolve manager display names dynamically. This replaces a hardcoded
       -- dictionary, so a newly appointed manager shows up automatically.
+      -- The key is lowercased so the same CTE can also resolve the
+      -- engagement/engineering manager ldaps carried on the project record,
+      -- which are not guaranteed to match the resource table's casing.
+      -- Lowercasing inside the GROUP BY (rather than in the JOIN predicate)
+      -- keeps the key unique, so none of these joins can fan out and
+      -- duplicate a person's hours.
       SELECT
-        COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap) AS ldap,
+        LOWER(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) AS ldap,
         ANY_VALUE(full_name) AS full_name
       FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
       WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
@@ -320,8 +326,15 @@ def query_emea_delivery_data(
       IF(a.project_id IS NOT NULL, COALESCE(a.project_name, 'Cloud Transformation'), NULL) AS base_project_name,
       -- Real people. NULL means genuinely unassigned at source - the UI must
       -- say so rather than substituting a placeholder name.
-      a.engagement_manager_name AS engagement_manager_name,
-      a.pso_engineering_manager AS pso_engineering_manager,
+      -- engagement_manager and pso_engineering_manager hold an LDAP, not a
+      -- name, so resolve them through the directory. COALESCE back to the raw
+      -- ldap when the person has no row in the resource table (e.g. a
+      -- sales-side EM): showing "barshasethi" is honest, inventing a name is
+      -- not.
+      a.engagement_manager_name AS engagement_manager_ldap,
+      COALESCE(emn.full_name, a.engagement_manager_name) AS engagement_manager_name,
+      a.pso_engineering_manager AS pso_engineering_manager_ldap,
+      COALESCE(egmn.full_name, a.pso_engineering_manager) AS pso_engineering_manager,
       a.project_manager         AS project_manager,
       a.project_manager_ldap    AS project_manager_ldap,
       CAST(a.project_start_date AS STRING) AS project_start_date,
@@ -332,7 +345,9 @@ def query_emea_delivery_data(
     FROM target_resources r
     LEFT JOIN current_load cl ON r.resource_id = cl.resource_id
     LEFT JOIN active_assignments a ON r.resource_id = a.resource_id
-    LEFT JOIN all_people mn ON r.manager_ldap = mn.ldap
+    LEFT JOIN all_people mn   ON LOWER(r.manager_ldap) = mn.ldap
+    LEFT JOIN all_people emn  ON LOWER(a.engagement_manager_name) = emn.ldap
+    LEFT JOIN all_people egmn ON LOWER(a.pso_engineering_manager) = egmn.ldap
     """
     params = [
         bigquery.ScalarQueryParameter("start_date", "STRING", start_date),
