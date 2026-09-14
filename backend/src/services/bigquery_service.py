@@ -182,6 +182,56 @@ def query_emea_delivery_data(
         AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
       GROUP BY resource_id
     ),
+    pto_weeks AS (
+      -- Every week from the anchor forward in which this person has booked
+      -- PTO. Source granularity is a WEEK - there is no day-level leave table
+      -- anywhere in service_cloudbi, so "on leave until" can only ever be
+      -- resolved to a week ending.
+      SELECT
+        resource_id,
+        timecard_week_ending AS wk,
+        ROUND(SUM(COALESCE(scheduled_pto_hours, 0)), 1) AS pto_hrs,
+        ROUND(MAX(COALESCE(work_hours, 0)), 1) AS cap_hrs
+      FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
+      WHERE _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
+        AND timecard_week_ending >= (SELECT wk FROM anchor)
+      GROUP BY resource_id, wk
+      HAVING SUM(COALESCE(scheduled_pto_hours, 0)) > 0
+    ),
+    pto_runs AS (
+      -- Rank the PTO weeks per person. A week belongs to the CURRENT leave run
+      -- only if every week between the anchor and it also has PTO, i.e. its
+      -- offset from the anchor equals its position in the sequence. Without
+      -- this, somebody out this week AND again at Christmas would read as being
+      -- on leave until December.
+      -- DIV(DATE_DIFF(..., DAY), 7) rather than DATE_DIFF(..., WEEK): the latter
+      -- counts week boundaries crossed, which is not the same thing.
+      SELECT
+        resource_id,
+        wk,
+        pto_hrs,
+        cap_hrs,
+        DIV(DATE_DIFF(wk, (SELECT wk FROM anchor), DAY), 7) AS wk_offset,
+        ROW_NUMBER() OVER (PARTITION BY resource_id ORDER BY wk) - 1 AS seq
+      FROM pto_weeks
+    ),
+    pto_summary AS (
+      -- One row per person. Only populated for people whose run starts in the
+      -- anchor week itself, so this can never claim a future holiday is current
+      -- leave. Grouped by resource_id, so the join below cannot fan out.
+      SELECT
+        resource_id,
+        MAX(wk) AS pto_through,
+        COUNT(*) AS pto_week_count,
+        -- Hours in the FINAL week of the run. A full week means they are out
+        -- for all of it; 32 of 40 means they are back before it ends, and the
+        -- UI must not imply a precision we do not have.
+        ARRAY_AGG(pto_hrs ORDER BY wk DESC LIMIT 1)[OFFSET(0)] AS pto_final_week_hours,
+        ARRAY_AGG(cap_hrs ORDER BY wk DESC LIMIT 1)[OFFSET(0)] AS pto_final_week_capacity
+      FROM pto_runs
+      WHERE wk_offset = seq
+      GROUP BY resource_id
+    ),
     current_load AS (
       -- Person-level scheduled hours for the anchor week ONLY. Previously this
       -- was AVG() across every week in the window, which reported a 15-week
@@ -385,6 +435,12 @@ def query_emea_delivery_data(
       r.hub,
       r.practice,
       r.is_ooo,
+      -- Week ending through which this person has booked continuous PTO, and
+      -- the hours in that final week. Week-level only; see pto_summary.
+      CAST(ps.pto_through AS STRING) AS pto_through,
+      ps.pto_week_count AS pto_week_count,
+      ps.pto_final_week_hours AS pto_final_week_hours,
+      ps.pto_final_week_capacity AS pto_final_week_capacity,
       COALESCE(cl.scheduled_timecard_hours, 0.0) AS scheduled_timecard_hours,
       -- Real weekly capacity for this person. NULL only if they have no row in
       -- the anchor week; the payload builder falls back to 40 in that case.
@@ -429,6 +485,7 @@ def query_emea_delivery_data(
       a.scheduled_timecard_hours AS proj_scheduled_hours
     FROM target_resources r
     LEFT JOIN current_load cl ON r.resource_id = cl.resource_id
+    LEFT JOIN pto_summary ps  ON r.resource_id = ps.resource_id
     LEFT JOIN active_assignments a ON r.resource_id = a.resource_id
     LEFT JOIN all_people mn   ON LOWER(r.manager_ldap) = mn.ldap
     LEFT JOIN all_people emn  ON LOWER(a.engagement_manager_name) = emn.ldap

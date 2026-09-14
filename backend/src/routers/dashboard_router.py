@@ -166,6 +166,28 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         role = row.get("role") or "Consultant"
         practice = row.get("practice") or "Cloud Delivery"
         is_ooo = str(row.get("is_ooo") or "").lower() == "true"
+        # Leave end date, week-level. The source has no day-level leave table,
+        # so this is the END OF THE LAST WEEK with booked PTO, not the last day
+        # off. pto_partial_final_week says the person is back before that week
+        # ends (e.g. 32h booked against a 40h week) so the UI can hedge rather
+        # than assert a precision the data does not have.
+        pto_through = str(row.get("pto_through") or "")[:10]
+
+        def _f(key):
+            try:
+                return float(row.get(key) or 0)
+            except (ValueError, TypeError):
+                return 0.0
+
+        pto_final_hrs = _f("pto_final_week_hours")
+        pto_final_cap = _f("pto_final_week_capacity")
+        pto_partial_final_week = bool(
+            pto_through and pto_final_cap > 0 and pto_final_hrs < pto_final_cap
+        )
+        try:
+            pto_week_count = int(row.get("pto_week_count") or 0)
+        except (ValueError, TypeError):
+            pto_week_count = 0
         
         has_project = bool(row.get("project_id"))
         proj_id = str(row.get("project_id") or "")
@@ -241,6 +263,9 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 "practice": practice,
                 "skills": practice,
                 "is_ooo": is_ooo,
+                "pto_through": pto_through,
+                "pto_week_count": pto_week_count,
+                "pto_partial_final_week": pto_partial_final_week,
                 "capacity_hours": cap,
                 "weekly_hours": float(row.get("scheduled_timecard_hours") or 0),
                 "assignments": []

@@ -2531,6 +2531,63 @@
       return d >= 0;
     }
 
+    // ---------------------------------------------------------------
+    // PTO pill
+    //
+    // ONE helper for every place that shows leave, so the roster, the bench
+    // modal and the roll-off spotlight cannot drift apart.
+    //
+    // IMPORTANT - the honesty of this label. The source (scheduled_pto_hours in
+    // scheduled_vs_actual_utilization) is WEEKLY. There is no day-level leave
+    // table, so we know the last WEEK someone has PTO booked, not the last day.
+    // Two cases:
+    //   full final week  (40h of 40h) -> they are out for all of it, so we can
+    //                                    say "back Mon <the following Monday>"
+    //   partial final week (32h of 40) -> they return partway through, and we
+    //                                    cannot say which day. Say "back during
+    //                                    w/c ..." rather than inventing a date.
+    // ---------------------------------------------------------------
+    function fmtDayMon(d) {
+      if (!d) return "";
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+    }
+
+    function ptoSummaryFor(r) {
+      if (!r || !r.is_ooo) return null;
+      const through = parseDateUTC(r.pto_through);
+      if (!through) {
+        // OOO with no PTO hours to walk. Measured as 0 of 183 cases today, but
+        // never assert a date we do not have.
+        return { short: "PTO", tip: "Flagged out of office this week. No booked PTO hours to derive a return date from." };
+      }
+      // The Monday after the last PTO week ends.
+      const backOn = new Date(through.getTime() + 2 * 86400000);
+      const weeks = Number(r.pto_week_count) || 1;
+      const weeksTxt = weeks === 1 ? "this week" : `${weeks} weeks`;
+      if (r.pto_partial_final_week) {
+        return {
+          short: `PTO → w/e ${fmtDayMon(through)}`,
+          tip: `Booked leave runs to the week ending ${fmtDayMon(through)} (${weeksTxt}), but not the whole of that final week `
+             + `- they are back at some point during it. Source records PTO by week, not by day.`
+        };
+      }
+      return {
+        short: `PTO → back ${fmtDayMon(backOn)}`,
+        tip: `Booked leave covers every working day through the week ending ${fmtDayMon(through)} (${weeksTxt}), `
+           + `so the first working day back is ${fmtDayMon(backOn)}. Source records PTO by week, not by day.`
+      };
+    }
+
+    // size: "sm" for dense table rows, "md" for cards.
+    function ptoPillHtml(r, size) {
+      const s = ptoSummaryFor(r);
+      if (!s) return "";
+      const cls = size === "sm"
+        ? "text-[9px] px-1.5 py-0.5"
+        : "text-[10px] px-2 py-0.5";
+      return `<span class="bg-amber-50 text-amber-800 border border-amber-200/80 ${cls} font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap" title="${s.tip}">🌴 ${s.short}</span>`;
+    }
+
     // Weekly hours for an assignment, tolerating the daily `hours` field.
     function assignmentWeeklyHours(a) {
       if (!a) return 0;
@@ -2597,13 +2654,14 @@
         .split(",").map(s => s.trim()).filter(Boolean);
     }
 
-    // Human-readable summary for the collapsed button.
+    // Human-readable summary for the collapsed button. Name only - the
+    // headcount used to be appended as "(86)" but it made the button noisy and
+    // the same number is already on the roster tab. It survives as a tooltip.
     function orgScopeLabelText(sel) {
       if (!sel.length || sel.includes("ALL")) return "All EMEA";
       const nameOf = (ldap) => {
         const hit = orgOptionsCache.find(o => o.ldap === ldap);
-        if (!hit) return ldap;
-        return hit.headcount ? `${hit.name} (${hit.headcount})` : hit.name;
+        return hit ? hit.name : ldap;
       };
       if (sel.length === 1) return nameOf(sel[0]);
       return `${sel.length} orgs selected`;
@@ -2624,8 +2682,8 @@
       const sel = pendingOrgSelection || [];
       const allTicked = sel.includes("ALL") || sel.length === 0;
 
-      const row = (value, text, ticked, sub) => `
-        <label class="flex items-start gap-2.5 px-3 py-1.5 hover:bg-[#1f1745] cursor-pointer transition-colors">
+      const row = (value, text, ticked, sub, tip) => `
+        <label class="flex items-start gap-2.5 px-3 py-1.5 hover:bg-[#1f1745] cursor-pointer transition-colors"${tip ? ` title="${tip}"` : ""}>
           <input type="checkbox" value="${value}" ${ticked ? "checked" : ""}
                  onchange="onOrgOptionToggle(this)"
                  class="mt-0.5 w-3.5 h-3.5 rounded accent-[#915EFF] cursor-pointer shrink-0">
@@ -2638,11 +2696,14 @@
       let html = row("ALL", "All EMEA", allTicked, "Everyone in the EMEA delivery pool");
       html += `<div class="my-1 border-t border-[#2a2356]"></div>`;
       orgOptionsCache.forEach(o => {
+        // Name only. The headcount is still fetched and is still used to order
+        // the list - it is just not printed next to the name any more.
         html += row(
           o.ldap,
-          o.headcount ? `${o.name} (${o.headcount})` : o.name,
+          o.name,
           !allTicked && sel.includes(o.ldap),
-          o.ldap
+          o.ldap,
+          o.headcount ? `${o.headcount} people report up to ${o.name}` : ""
         );
       });
       box.innerHTML = html;
@@ -4246,6 +4307,10 @@
                     <div class="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
                       <span>@${rLdap}</span>
                       ${r.manager_ldap ? `<span class="text-slate-300">•</span><span class="text-indigo-600 font-semibold bg-indigo-50/70 border border-indigo-150 px-1.5 py-0.2 rounded text-[9px] inline-flex items-center gap-0.5" title="Direct Manager: @${r.manager_ldap}">👤 ${mgrDisplayName}</span>` : ''}
+                      ${/* Somebody on the bench who is actually on leave is not
+                            available to staff. Without this the roster showed
+                            them identically to a genuinely free person. */''}
+                      ${ptoPillHtml(r, "sm")}
                     </div>
                     ${multiProjIndicator}
                   </div>
@@ -5105,9 +5170,7 @@
         const regBadge = isGsd
           ? `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span> <span class="bg-slate-100 text-slate-600 border border-slate-200/80 text-[9px] font-bold px-1.5 py-0.5 rounded-md" title="Dedicated Delivery Center (CC1)">Delivery Center</span>`
           : `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span>`;
-        const oooPill = r.is_ooo
-          ? `<span class="bg-amber-50 text-amber-800 border border-amber-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">🌴 OOO (PTO)</span>`
-          : '';
+        const oooPill = ptoPillHtml(r, "md");
 
         const runwayTag = data.minRunway <= 0 ? "Ends Today" : `${data.minRunway} Days Left`;
 
@@ -5235,9 +5298,7 @@
         const regBadge = isGsd
           ? `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span> <span class="bg-slate-100 text-slate-600 border border-slate-200/80 text-[9px] font-bold px-1.5 py-0.5 rounded-md" title="Dedicated Delivery Center (CC1)">Delivery Center</span>`
           : `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span>`;
-        const oooPill = r.is_ooo
-          ? `<span class="bg-amber-50 text-amber-800 border border-amber-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">🌴 PTO</span>`
-          : '';
+        const oooPill = ptoPillHtml(r, "md");
         const practiceStr = r.practice || r.skills || "Cloud Delivery";
 
         container.innerHTML += `
