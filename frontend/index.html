@@ -2442,6 +2442,17 @@
       return Math.max(0, Math.min(100, Number(pct) || 0));
     }
 
+    // Hours for display. Keeps one decimal when the value is fractional.
+    // Rounding to a whole number made real data look broken: somebody
+    // scheduled 40.3h against a 40h week is genuinely 101%, but printing
+    // "101% (40h)" reads like an arithmetic error. Print "101% (40.3h)".
+    function fmtHrs(h) {
+      const n = Number(h);
+      if (!isFinite(n)) return "0";
+      const r = Math.round(n * 10) / 10;
+      return Number.isInteger(r) ? String(r) : r.toFixed(1);
+    }
+
     // Parse a YYYY-MM-DD string as a UTC midnight date (no timezone drift).
     function parseDateUTC(dateStr) {
       if (!dateStr) return null;
@@ -3962,7 +3973,7 @@
             } else if (isPersonOver) {
               // Booked beyond their contracted week. Previously indistinguishable
               // from a healthy "100% Staffed", which hid every over-booking.
-              statusBadge = `<span class="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-purple-200/80 shadow-2xs" title="Scheduled ${personTotalDeliveryHrs.toFixed(0)}h against a ${stdCap}h week (${(personTotalDeliveryHrs - stdCap).toFixed(0)}h over)"><span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> ${personRawPct}% Over-allocated</span>`;
+              statusBadge = `<span class="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-purple-200/80 shadow-2xs" title="Scheduled ${fmtHrs(personTotalDeliveryHrs)}h against a ${fmtHrs(stdCap)}h week (${fmtHrs(personTotalDeliveryHrs - stdCap)}h over)"><span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> ${personRawPct}% Over-allocated</span>`;
             } else if (isPersonPartial) {
               statusBadge = `<span class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> ${personEffPct}% (${personAvailPct}% Avail)</span>`;
             }
@@ -4011,14 +4022,14 @@
                   </div>
                 </div>`
               : `<div>
-                  <span class="font-bold ${isPersonOver ? 'text-purple-700' : 'text-slate-900'} text-xs">${rowAllocPct}% <span class="text-[10px] text-slate-400 font-normal">(${rowWeeklyHrs.toFixed(0)}h)</span></span>
+                  <span class="font-bold ${isPersonOver ? 'text-purple-700' : 'text-slate-900'} text-xs">${rowAllocPct}% <span class="text-[10px] text-slate-400 font-normal">(${fmtHrs(rowWeeklyHrs)}h)</span></span>
                   <div class="w-16 bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
                     <div class="${isPersonOver ? 'bg-purple-500' : (rowAllocPct >= 85 ? 'bg-emerald-500' : 'bg-amber-500')} h-1 rounded-full" style="width: ${clampBar(rowAllocPct)}%"></div>
                   </div>
                 </div>`;
 
             const multiProjIndicator = (!isPersonBench && activeDelivery.length > 1)
-              ? `<span class="${isPersonOver ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-indigo-50 text-indigo-700 border-indigo-150'} text-[9px] font-bold px-1.5 py-0.5 rounded border inline-block mt-0.5">${activeDelivery.length} entries &bull; ${personTotalDeliveryHrs.toFixed(0)}h total${isPersonOver ? ` / ${stdCap}h` : ''}</span>`
+              ? `<span class="${isPersonOver ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-indigo-50 text-indigo-700 border-indigo-150'} text-[9px] font-bold px-1.5 py-0.5 rounded border inline-block mt-0.5">${activeDelivery.length} entries &bull; ${fmtHrs(personTotalDeliveryHrs)}h total${isPersonOver ? ` / ${fmtHrs(stdCap)}h` : ''}</span>`
               : ``;
 
             tr.innerHTML = `
@@ -4155,7 +4166,7 @@
             // Show the real share, and the hours so it can be checked.
             pct = Math.max(0, Math.round(Number(pct) || 0));
             const pHrsLabel = (p.hours !== undefined && p.hours !== null && p.hours > 0)
-              ? ` <span class="text-[10px] text-slate-400 font-normal">${Math.round(p.hours)}h</span>`
+              ? ` <span class="text-[10px] text-slate-400 font-normal">${fmtHrs(p.hours)}h</span>`
               : ``;
             const pctColor = pct > 100 ? 'text-purple-700' : 'text-indigo-600';
             const pctTitle = pct > 100
