@@ -458,9 +458,10 @@
               <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"></path><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"></path><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"></path><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"></path></svg>
               <span>Sign In with Google</span>
             </button>
-            <button onclick="document.getElementById('login-overlay').style.display = 'none'; if(typeof loadData === 'function') loadData();" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 px-4 rounded-xl transition cursor-pointer border border-slate-200">
-              Explore Dashboard
-            </button>
+            <!-- The "Explore Dashboard" button used to sit here. It dismissed
+                 this overlay and called loadData() with no token, so anyone who
+                 reached the URL saw the backend's cached snapshot. Signing in is
+                 now the only way in. -->
           </div>
         </div>
     </div>
@@ -2655,6 +2656,38 @@
 
     let hasLoadedOnce = false;
 
+    // The API refused the session. Discard the dead token so it cannot be
+    // replayed, drop anything already rendered, and put the user back in front
+    // of the sign-in card. Without the clear-down a rejected user could be left
+    // looking at the previous user's numbers.
+    function handleUnauthorized() {
+      try {
+        localStorage.removeItem("google_oauth_token");
+        localStorage.removeItem("google_oauth_token_expiry");
+      } catch (e) {}
+      window.bqAccessToken = null;
+      globalData = {};
+      if (typeof window.showLoginOverlay === 'function') {
+        window.showLoginOverlay("Your session has expired. Sign in with Google to continue.");
+      }
+    }
+
+    // Every call to the API must carry the caller's token. /api/upload and
+    // /api/agent/chat previously sent none, so the backend fell through to ADC,
+    // failed, and answered from the stale cached snapshot - the assistant was
+    // quoting 460 people while the dashboard showed 86.
+    async function authHeaders(base) {
+      const h = Object.assign({}, base || {});
+      const t = (typeof window.ensureFreshToken === 'function')
+        ? await window.ensureFreshToken()
+        : (window.bqAccessToken || null);
+      if (t) {
+        h["X-User-OAuth-Token"] = t;
+        h["X-Google-OAuth-Token"] = t;
+      }
+      return h;
+    }
+
     async function loadData(syncBq = false, startDate = null, endDate = null) {
       const syncBtn = document.getElementById("btn-sync-bq");
       const origHtml = syncBtn ? syncBtn.innerHTML : "";
@@ -2701,6 +2734,19 @@
         if (!token && syncBq && typeof window.requestInteractiveToken === 'function') {
           token = await window.requestInteractiveToken();
         }
+
+        // Hard gate. Without a token we do not call the API at all: the backend
+        // answers an unauthenticated /api/data from its cached snapshot, which
+        // is exactly the stale, unauthorised view we must never show. Every
+        // caller of loadData() passes through here, so this also covers the org
+        // picker and the date filters, not just the initial page load.
+        if (!token) {
+          if (typeof window.showLoginOverlay === 'function') {
+            window.showLoginOverlay("Sign in with Google to load live BigQuery data.");
+          }
+          return;
+        }
+
         const buildHeaders = (t) => {
           const h = { "Content-Type": "application/json" };
           if (t) {
@@ -2723,6 +2769,7 @@
 
         if (syncBq) {
           res = await fetch('/api/refresh-bq' + qs, { method: 'POST', headers });
+          if (res.status === 401) { handleUnauthorized(); return; }
           const json = await res.json();
           globalData = json.data || json;
           // Only claim success if the backend actually reached BigQuery. This
@@ -2735,6 +2782,7 @@
           }
         } else {
           res = await fetch('/api/data' + qs, { headers });
+          if (res.status === 401) { handleUnauthorized(); return; }
           globalData = await res.json();
 
           // Backend answered from the cached snapshot - almost always a dead
@@ -3101,7 +3149,12 @@
       btn.disabled = true;
 
       try {
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: formData
+        });
+        if (res.status === 401) { handleUnauthorized(); return; }
         globalData = await res.json();
         closeAddResourceModal();
         fileInput.value = "";
@@ -5928,9 +5981,15 @@ Thank you!
 
         const res = await fetch("/api/agent/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: await authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ message: msg, active_tab: activeTabName })
         });
+        if (res.status === 401) {
+          removeAgentTyping(typingId);
+          appendAgentBubble("agent", "Your session has expired. Please sign in again to continue.", []);
+          handleUnauthorized();
+          return;
+        }
         const data = await res.json();
         removeAgentTyping(typingId);
         appendAgentBubble("agent", data.reply, data.actions);
@@ -6106,9 +6165,15 @@ Thank you!
     }
 
     // Start App
-    document.addEventListener("DOMContentLoaded", () => {
-      loadData();
-    });
+    //
+    // There is deliberately NO loadData() call here. This fired on every page
+    // load regardless of authentication, so the dashboard fetched and rendered
+    // data behind the login overlay - that is why a signed-out visitor could
+    // see numbers blurred behind the card. The auth module at the end of this
+    // file owns the decision: it calls loadData() when it holds a valid token,
+    // and shows the login overlay when it does not. Module scripts are deferred
+    // and run before DOMContentLoaded, so nothing is lost by removing this; it
+    // also removes a duplicate BigQuery query on every authenticated load.
   </script>
 
   <!-- ========================================== -->
@@ -6229,6 +6294,12 @@ Thank you!
     const statusEl = document.getElementById("login-status");
     if (statusEl && msg) statusEl.innerText = msg;
   }
+
+  // These live inside a module, so they are not global by default. The main
+  // app script (a classic script) needs them to force the user back to the
+  // sign-in card when a token is missing or the API rejects one.
+  window.showLoginOverlay = showLoginOverlay;
+  window.hideLoginOverlay = hideLoginOverlay;
 
   // Google OAuth access tokens are valid for roughly one hour.
   //

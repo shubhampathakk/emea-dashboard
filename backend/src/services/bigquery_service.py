@@ -24,13 +24,13 @@ def extract_ldap(raw_val: Optional[str], fallback: str = "") -> str:
         val = val.split("@")[0].strip()
     return val.lower() or (fallback.lower().replace(" ", "") if fallback else "unknown")
 
-def get_bq_client(
+def _extract_user_token(
     request: Request,
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_user_oauth_token: Optional[str] = Header(None, alias="X-User-OAuth-Token"),
-    x_google_oauth_token: Optional[str] = Header(None, alias="X-Google-OAuth-Token"),
-) -> bigquery.Client:
-    """Returns BigQuery client using the user's OAuth token."""
+    authorization: Optional[str],
+    x_user_oauth_token: Optional[str],
+    x_google_oauth_token: Optional[str],
+) -> Optional[str]:
+    """Pulls the caller's Google OAuth access token out of the request."""
     token = (
         x_user_oauth_token
         or x_google_oauth_token
@@ -39,22 +39,60 @@ def get_bq_client(
         or request.headers.get("x-google-oauth-token")
         or request.headers.get("X-Google-OAuth-Token")
     )
-    
+
     if not token and authorization and authorization.startswith("Bearer "):
         auth_token = authorization.split("Bearer ")[1].strip()
         if auth_token != "MOCK_TOKEN":
             token = auth_token
 
-    if token and token.strip():
+    return token.strip() if token and token.strip() else None
+
+
+def get_bq_client(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_user_oauth_token: Optional[str] = Header(None, alias="X-User-OAuth-Token"),
+    x_google_oauth_token: Optional[str] = Header(None, alias="X-Google-OAuth-Token"),
+) -> bigquery.Client:
+    """Returns BigQuery client using the user's OAuth token."""
+    token = _extract_user_token(request, authorization, x_user_oauth_token, x_google_oauth_token)
+
+    if token:
         logger.info("Using explicit OAuth token from Header for BigQuery.")
         user_credentials = Credentials(
-            token=token.strip(),
+            token=token,
             scopes=[BIGQUERY_SCOPE],
         )
         return bigquery.Client(project=PROJECT_ID, credentials=user_credentials)
-    
+
     logger.info("No OAuth token provided. Falling back to ADC.")
     return bigquery.Client(project=PROJECT_ID)
+
+
+def require_bq_client(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_user_oauth_token: Optional[str] = Header(None, alias="X-User-OAuth-Token"),
+    x_google_oauth_token: Optional[str] = Header(None, alias="X-Google-OAuth-Token"),
+) -> bigquery.Client:
+    """Same as get_bq_client, but REFUSES anonymous callers.
+
+    Routes that return the full dataset must use this. With get_bq_client an
+    unauthenticated request fell through to ADC; the runtime service account has
+    no access to concord-prod, so the query failed and the route answered from
+    the cached snapshot. The practical effect was that anyone who could reach
+    the URL got a stale copy of the whole roster without signing in. Serving 401
+    forces the browser back to the sign-in card.
+    """
+    token = _extract_user_token(request, authorization, x_user_oauth_token, x_google_oauth_token)
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Sign in with Google to load live BigQuery data.",
+        )
+
+    user_credentials = Credentials(token=token, scopes=[BIGQUERY_SCOPE])
+    return bigquery.Client(project=PROJECT_ID, credentials=user_credentials)
 
 def query_emea_delivery_data(
     client: bigquery.Client,

@@ -3,7 +3,7 @@ import json
 import datetime
 import logging
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
 from google.cloud import bigquery
 
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from src.services.bigquery_service import (
     get_bq_client, 
+    require_bq_client,
     query_emea_delivery_data, 
     query_emea_pipeline_data,
     query_org_options,
@@ -24,6 +25,37 @@ from src.services.manager_directory import get_manager_name
 # contains this ldap, at any depth and in any region. Pass org_ldap=ALL to see
 # the whole EMEA pool instead.
 DEFAULT_ORG_LDAP = "guptaashutosh"
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    """True when BigQuery rejected the caller's credential.
+
+    Used to decide between "your session died, sign in again" (401) and "the
+    query or the service broke" (fall back to the cached snapshot). Matching on
+    the class name as well as the text keeps this working across google-auth /
+    google-api-core versions without importing their private exception trees.
+    """
+    code = getattr(exc, "code", None)
+    if code in (401, 403):
+        return True
+    if getattr(exc, "response", None) is not None:
+        if getattr(exc.response, "status_code", None) in (401, 403):
+            return True
+
+    name = type(exc).__name__
+    if name in {"Unauthorized", "Unauthenticated", "Forbidden", "RefreshError", "DefaultCredentialsError"}:
+        return True
+
+    text = str(exc).lower()
+    return any(marker in text for marker in (
+        "invalid authentication credentials",
+        "invalid credentials",
+        "access token",
+        "invalid_grant",
+        "unauthorized",
+        "401",
+        "permission denied",
+    ))
 
 
 def resolve_org_ldap(value: Optional[str]) -> Optional[str]:
@@ -700,7 +732,8 @@ def get_dashboard_data(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     org_ldap: Optional[str] = Query(None),
-    bq_client: bigquery.Client = Depends(get_bq_client),
+    # Strict: an anonymous caller gets 401, never the cached snapshot.
+    bq_client: bigquery.Client = Depends(require_bq_client),
 ):
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
@@ -720,6 +753,17 @@ def get_dashboard_data(
         payload["pipeline_scope"] = "EMEA-wide"
         return payload
     except Exception as e:
+        # An auth failure must NOT degrade to the cached snapshot. Otherwise the
+        # 401 gate above is cosmetic: any non-empty string in the header gets
+        # past it, BigQuery rejects the credential here, and the caller is
+        # handed the stale roster anyway. Only genuine query/infra failures may
+        # fall back.
+        if _is_auth_error(e):
+            logger.warning(f"Rejecting request: BigQuery refused the caller's token. {e}")
+            raise HTTPException(
+                status_code=401,
+                detail="Your Google session is no longer valid. Sign in again.",
+            )
         # This used to fail silently: the UI kept saying "Live Delivery Pool"
         # while rendering a stale snapshot. The payload now carries the reason.
         logger.warning(f"BigQuery failed, using fallback data. Error: {e}")
@@ -729,7 +773,7 @@ def get_dashboard_data(
 
 @router.get("/dashboard/org-options")
 @router.get("/org-options")
-def get_org_options(bq_client: bigquery.Client = Depends(get_bq_client)):
+def get_org_options(bq_client: bigquery.Client = Depends(require_bq_client)):
     """Managers available for the org-scope dropdown, largest org first.
 
     Derived live from manager_hierarchy_user_names so new managers appear
@@ -766,7 +810,8 @@ def refresh_bq(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     org_ldap: Optional[str] = Query(None),
-    bq_client: bigquery.Client = Depends(get_bq_client),
+    # Strict: returns the same full payload as /data, so it needs the same gate.
+    bq_client: bigquery.Client = Depends(require_bq_client),
 ):
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
@@ -783,6 +828,12 @@ def refresh_bq(
         payload["pipeline_scope"] = "EMEA-wide"
         return {"status": "ok", "data": payload}
     except Exception as e:
+        if _is_auth_error(e):
+            logger.warning(f"Rejecting refresh: BigQuery refused the caller's token. {e}")
+            raise HTTPException(
+                status_code=401,
+                detail="Your Google session is no longer valid. Sign in again.",
+            )
         logger.warning(f"BigQuery refresh failed: {e}")
         payload = get_fallback_payload(start_date=clean_start, end_date=clean_end)
         payload["data_source_error"] = str(e)[:300]
@@ -792,7 +843,7 @@ def refresh_bq(
 @router.get("/users/{ldap}/projects")
 def get_user_projects(
     ldap: str,
-    bq_client: bigquery.Client = Depends(get_bq_client),
+    bq_client: bigquery.Client = Depends(require_bq_client),
 ):
     """Fetches active/scheduled projects for an LDAP (or email)."""
     try:
@@ -804,7 +855,7 @@ def get_user_projects(
 @router.get("/users/{ldap}/accounts")
 def get_user_accounts(
     ldap: str,
-    bq_client: bigquery.Client = Depends(get_bq_client),
+    bq_client: bigquery.Client = Depends(require_bq_client),
 ):
     """Fetches unique accounts for an LDAP (or email)."""
     try:
@@ -817,7 +868,8 @@ def get_user_accounts(
 async def upload_staffing_sheet(
     file: UploadFile = File(...),
     sheet_name: Optional[str] = Form(None),
-    bq_client: bigquery.Client = Depends(get_bq_client),
+    # Returns the full dashboard payload, so it needs the same gate as /data.
+    bq_client: bigquery.Client = Depends(require_bq_client),
 ):
     """
     Accepts staffing sheets (.csv, .xlsx, .xls) to validate or sync data.
@@ -842,7 +894,11 @@ class AgentChatRequest(BaseModel):
 @router.post("/chat")
 def agent_chat_endpoint(
     req: AgentChatRequest,
-    bq_client: bigquery.Client = Depends(get_bq_client),
+    # The assistant answers questions about the roster, so it is just another
+    # read of the same data and needs the same gate. The frontend previously
+    # sent no token here at all, which meant every answer came from the stale
+    # snapshot rather than the live org-scoped numbers on screen.
+    bq_client: bigquery.Client = Depends(require_bq_client),
 ):
     """Answers user inquiries regarding staffing, workloads, bench, pipeline, and customer accounts."""
     msg = (req.message or "").strip().lower()
