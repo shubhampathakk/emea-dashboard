@@ -153,9 +153,19 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
         is_ooo = str(row.get("is_ooo") or "").lower() == "true"
         
         has_project = bool(row.get("project_id"))
+        proj_id = str(row.get("project_id") or "")
         proj_name = row.get("project_name") or ""
+        # Clean name for grouping: project_name has the assignment id appended.
+        base_proj_name = row.get("base_project_name") or proj_name
         acc_name = (row.get("account_name") or "").strip()
-        pm_name = row.get("engagement_manager_name") or "Delivery Lead"
+
+        # Real people from the source. Empty string means genuinely unassigned;
+        # these used to fall back to the invented strings "Delivery Lead" and
+        # "PSO Lead", which rendered on screen as if they were real names.
+        em_ldap = (row.get("engagement_manager_name") or "").strip()
+        engm_ldap = (row.get("pso_engineering_manager") or "").strip()
+        pm_person = (row.get("project_manager") or "").strip()
+        pm_person_ldap = (row.get("project_manager_ldap") or "").strip()
 
         # Assignment-level hours ONLY. This must not fall back to the person's
         # total hours: doing so invented a phantom "Delivery Project" for every
@@ -233,17 +243,70 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             if acc_name not in customer_map:
                 customer_map[acc_name] = {
                     "account_name": acc_name,
-                    "program_manager": pm_name,
-                    "delivery_executive": "Delivery Executive",
+                    # Account-level owner. There is NO "delivery executive"
+                    # column anywhere in the source; engagement_manager is the
+                    # closest real thing and, once scoped to this org's
+                    # projects, resolves to exactly one person per account.
+                    # Left empty when the source has none - the UI says
+                    # "Unassigned". This used to be the literal hardcoded
+                    # string "Delivery Executive" on all 30 accounts.
+                    "engagement_manager": "",
+                    "engineering_managers": [],
                     "total_hours": 0.0,
+                    "projects": [],
                     "EMEA": [],
                     "GSD": []
                 }
-            
-            if hub_key not in customer_map[acc_name]:
-                customer_map[acc_name][hub_key] = []
-            
-            existing_p = next((p for p in customer_map[acc_name][hub_key] if p["name"] == res_name), None)
+
+            acct = customer_map[acc_name]
+            if em_ldap and not acct["engagement_manager"]:
+                acct["engagement_manager"] = em_ldap
+            if engm_ldap and engm_ldap not in acct["engineering_managers"]:
+                acct["engineering_managers"].append(engm_ldap)
+
+            # ---- project level -------------------------------------------
+            # Group on project_id, NOT on project_name: project_name carries an
+            # appended assignment id, which splits 47 real projects into 153.
+            proj = next((p for p in acct["projects"] if p["project_id"] == proj_id), None)
+            if proj is None:
+                proj = {
+                    "project_id": proj_id,
+                    "project_name": base_proj_name,
+                    "project_manager": pm_person,          # "" = unassigned at source
+                    "project_manager_ldap": pm_person_ldap,
+                    "engagement_manager": em_ldap,
+                    "engineering_manager": engm_ldap,
+                    "start": start_date,
+                    "end": end_date,
+                    "total_hours": 0.0,
+                    "people": []
+                }
+                acct["projects"].append(proj)
+            elif pm_person and not proj["project_manager"]:
+                proj["project_manager"] = pm_person
+                proj["project_manager_ldap"] = pm_person_ldap
+
+            proj["total_hours"] = round(proj["total_hours"] + hrs, 1)
+            pp = next((x for x in proj["people"] if x["ldap"] == ldap), None)
+            if pp:
+                pp["hours"] = round(pp["hours"] + hrs, 1)
+                pp["allocation_pct"] = max(0, round((pp["hours"] / cap) * 100)) if cap > 0 else 0
+            else:
+                proj["people"].append({
+                    "name": res_name,
+                    "ldap": ldap,
+                    "role": role,
+                    "hub": hub_key,
+                    "hours": round(hrs, 1),
+                    "capacity_hours": cap,
+                    "allocation_pct": max(0, round((hrs / cap) * 100)) if hrs > 0 and cap > 0 else 0
+                })
+
+            # ---- account level (unchanged shape, used by the summary pills) --
+            if hub_key not in acct:
+                acct[hub_key] = []
+
+            existing_p = next((p for p in acct[hub_key] if p["name"] == res_name), None)
             if existing_p:
                 existing_p["hours"] = round(existing_p.get("hours", 0.0) + hrs, 1)
                 # "hours" here is a WEEKLY figure, divided by this person's real
@@ -254,7 +317,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                 existing_p["allocation_pct"] = max(0, round((existing_p["hours"] / cap) * 100)) if cap > 0 else 0
             else:
                 p_pct = max(0, round((hrs / cap) * 100)) if hrs > 0 and cap > 0 else 0
-                customer_map[acc_name][hub_key].append({
+                acct[hub_key].append({
                     "name": res_name,
                     "ldap": ldap,
                     "role": role,
@@ -262,7 +325,7 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
                     "capacity_hours": cap,
                     "allocation_pct": p_pct
                 })
-            customer_map[acc_name]["total_hours"] = round(customer_map[acc_name]["total_hours"] + hrs, 1)
+            acct["total_hours"] = round(acct["total_hours"] + hrs, 1)
 
     # resource_map is keyed by resource_id, so build a name index for the
     # portfolio backfill below.
@@ -521,7 +584,11 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             "region": "EMEA",
             "sub_region": f"{sub_reg} ({country})" if country != "Unknown" else sub_reg,
             "status": status_badge,
-            "program_manager": "PSO Delivery Lead",
+            # pso_pipeline carries no delivery-side owner, so there is nobody
+            # real to name here. This used to say "PSO Delivery Lead", which
+            # rendered as though it were a person. The frontend skips the badge
+            # when this is empty.
+            "program_manager": "",
             "implementation_led_by": "Delivery Center (GDC)" if is_dc else "Field PSO",
             "partner": p.get("offering") or "Google Cloud PSO",
             "services_revenue": f"${round(val):,}" if val > 0 else "$0",
@@ -1069,7 +1136,17 @@ def agent_chat_endpoint(
             "**Top Client Engagements by Volume:**"
         ]
         for c in top_custs:
-            lines.append(f"* **{c.get('account_name')}** — **{c.get('total_hours')} hrs/wk** | PM: {c.get('program_manager')} | DE: {c.get('delivery_executive')}")
+            # Was: "PM: {program_manager} | DE: {delivery_executive}" - both of
+            # those were placeholder strings, so the assistant confidently
+            # reported "Delivery Lead" and "Delivery Executive" as real people.
+            em = c.get("engagement_manager") or "Unassigned"
+            projs = c.get("projects") or []
+            pms = sorted({p.get("project_manager") for p in projs if p.get("project_manager")})
+            pm_txt = ", ".join(pms) if pms else "Unassigned"
+            lines.append(
+                f"* **{c.get('account_name')}** — **{c.get('total_hours')} hrs/wk** "
+                f"across {len(projs)} project(s) | EM: {em} | PM: {pm_txt}"
+            )
             
         actions = [
             {"label": "🏢 Open Customer Portfolio", "tab": "portfolio"},

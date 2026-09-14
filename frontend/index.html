@@ -2094,54 +2094,25 @@
     let portfolioSort = "resources";
     let timelineFilter = "all";
 
-    const PGM_LOOKUP = {
-      "american express": "Orlando White",
-      "amex": "Orlando White",
-      "at&t": "Rick Robinson",
-      "att": "Rick Robinson",
-      "comcast": "Knox McMurry",
-      "elevance": "Leslie Chou, Lokesh Harjani",
-      "farmers": "Tim Sale",
-      "macy": "Sunaina Sridhar",
-      "united healthcare": "Terrance Whitehead",
-      "united health": "Terrance Whitehead",
-      "unitedhealth": "Terrance Whitehead",
-      "optum": "Terrance Whitehead",
-      "verizon": "Narges Asli"
-    };
+    // The hardcoded PGM_LOOKUP / DE_LOOKUP tables that used to live here have
+    // been removed. They mapped 13 US accounts (Amex, AT&T, Comcast, Verizon,
+    // UnitedHealth...) to hardcoded person names. None of them could ever match
+    // an EMEA account, so they were dead mock data sitting behind a real-looking
+    // "DE:" badge. Account ownership now comes from the source only:
+    // projects.engagement_manager, surfaced as c.engagement_manager.
 
-    const DE_LOOKUP = {
-      "american express": "Orlando White",
-      "amex": "Orlando White",
-      "at&t": "Rick Robinson",
-      "att": "Rick Robinson",
-      "comcast": "Knox McMurry",
-      "elevance": "Leslie Chou, Lokesh Harjani",
-      "farmers": "Tim Sale",
-      "macy": "Sunaina Sridhar",
-      "united healthcare": "Terrance Whitehead",
-      "united health": "Terrance Whitehead",
-      "unitedhealth": "Terrance Whitehead",
-      "optum": "Terrance Whitehead",
-      "verizon": "Narges Asli"
-    };
-
-    function getPgM(accName) {
-      if (!accName) return "";
-      const lower = String(accName).toLowerCase();
-      for (const [k, v] of Object.entries(PGM_LOOKUP)) {
-        if (lower.includes(k)) return v;
-      }
-      return "";
-    }
-
-    function getDE(accName) {
-      if (!accName) return "";
-      const lower = String(accName).toLowerCase();
-      for (const [k, v] of Object.entries(DE_LOOKUP)) {
-        if (lower.includes(k)) return v;
-      }
-      return "";
+    // Turn an LDAP from the source into something readable. The source gives us
+    // an LDAP (e.g. "janirudh"); if that person happens to be in the loaded
+    // roster we can show their full name, otherwise show the LDAP itself, which
+    // is still an unambiguous, real identifier. Never invents a name.
+    function resolveLdapName(ldap) {
+      if (!ldap) return "";
+      const key = String(ldap).split("@")[0].trim().toLowerCase();
+      if (!key) return "";
+      const hit = (globalData.resources || []).find(
+        r => String(r.ldap || "").toLowerCase() === key
+      );
+      return hit && hit.name ? hit.name : key;
     }
 
     // ---------------------------------------------------------------
@@ -4111,14 +4082,24 @@
       customers.forEach(c => {
         const totalPeople = (c.EMEA ? c.EMEA.length : 0) + (c.GSD ? c.GSD.length : 0);
         
-        const pgmName = c.program_manager || getPgM(c.account_name);
-        const deName = c.delivery_executive || getDE(c.account_name);
-        
-        // Search filter matching on Account, DE, PgM, or Staffed People
+        const projects = c.projects || [];
+
+        // Account owner: the real engagement_manager from the source. There is
+        // no "delivery executive" column anywhere, so this is labelled EM, not
+        // DE. Empty means genuinely unassigned at source.
+        const emLdap = c.engagement_manager || "";
+        const emName = emLdap ? resolveLdapName(emLdap) : "";
+        // Project managers actually on this account's in-scope projects.
+        const pmNames = [...new Set(
+          projects.map(p => p.project_manager).filter(Boolean)
+        )];
+
+        // Search filter matching on Account, EM, PM, project, or staffed people
         if (q) {
           const matchAccount = c.account_name.toLowerCase().includes(q);
-          const matchDE = deName.toLowerCase().includes(q);
-          const matchPgM = pgmName.toLowerCase().includes(q);
+          const matchDE = emName.toLowerCase().includes(q) || emLdap.toLowerCase().includes(q);
+          const matchPgM = pmNames.some(n => n.toLowerCase().includes(q));
+          const matchProj = projects.some(p => (p.project_name || "").toLowerCase().includes(q));
           let matchPeople = false;
           ["GSD", "EMEA"].forEach(reg => {
             (c[reg] || []).forEach(p => {
@@ -4127,7 +4108,7 @@
               }
             });
           });
-          if (!matchAccount && !matchDE && !matchPgM && !matchPeople) return;
+          if (!matchAccount && !matchDE && !matchPgM && !matchProj && !matchPeople) return;
         }
 
         const card = document.createElement("div");
@@ -4176,19 +4157,66 @@
           });
         });
 
-        // Leadership Badges (Delivery Executive & Program Manager)
-        let leadershipBadges = "";
-        if (deName && pgmName && deName.toLowerCase() !== pgmName.toLowerCase()) {
-          leadershipBadges = `
-            <span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Delivery Executive">👔 <strong class="text-indigo-900 font-extrabold">DE:</strong> ${deName}</span>
-            <span class="bg-purple-50 border border-purple-200/80 text-purple-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Program Manager">📋 <strong class="text-purple-900 font-extrabold">PgM:</strong> ${pgmName}</span>
-          `;
-        } else if (deName || pgmName) {
-          const leaderName = deName || pgmName;
-          leadershipBadges = `<span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Delivery Executive / Program Manager">👔 <strong class="text-indigo-900 font-extrabold">DE / PgM:</strong> ${leaderName}</span>`;
-        } else {
-          leadershipBadges = `<span class="text-[10px] text-slate-400 font-medium bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-lg">DE / PgM: Unassigned</span>`;
+        // Account-level owner badge. Honest labelling: the source column is
+        // engagement_manager, so it says EM. The old code rendered a "DE:"
+        // badge containing the hardcoded literal "Delivery Executive".
+        let leadershipBadges = emName
+          ? `<span class="bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Engagement Manager (projects.engagement_manager) - the account-level owner in the source. There is no Delivery Executive field.">👔 <strong class="text-indigo-900 font-extrabold">EM:</strong> ${emName}</span>`
+          : `<span class="text-[10px] text-slate-400 font-medium bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-lg" title="projects.engagement_manager is empty for every in-scope project on this account">EM: Unassigned</span>`;
+
+        if (pmNames.length) {
+          const pmLabel = pmNames.length === 1 ? pmNames[0] : `${pmNames.length} PMs`;
+          leadershipBadges += `<span class="bg-purple-50 border border-purple-200/80 text-purple-700 text-[11px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-2xs" title="Project managers on this account: ${pmNames.join(', ')}">📋 <strong class="text-purple-900 font-extrabold">PM:</strong> ${pmLabel}</span>`;
         }
+
+        // ---- project drill-down ----------------------------------------
+        // Accounts group into REAL projects (keyed on project_id). The flat
+        // project_name has the assignment id appended, which is why the roster
+        // shows 153 "projects" for 47 real ones.
+        const accKey = (c.account_name || "").replace(/[^a-zA-Z0-9]/g, "_");
+        let projectRows = "";
+        projects
+          .slice()
+          .sort((a, b) => (b.total_hours || 0) - (a.total_hours || 0))
+          .forEach(p => {
+            const pmCell = p.project_manager
+              ? `<span class="text-purple-700 font-semibold">📋 ${p.project_manager}</span>`
+              : `<span class="text-slate-400 italic" title="project_manager is blank or a 'Please Update Project Manager' placeholder at source">PM Unassigned</span>`;
+            const endCell = p.end
+              ? `<span class="text-slate-500">ends ${formatRosterDate(p.end)}</span>`
+              : `<span class="text-slate-300">no end date</span>`;
+            const memberPills = (p.people || [])
+              .slice()
+              .sort((x, y) => (y.hours || 0) - (x.hours || 0))
+              .map(m => {
+                const mp = Math.max(0, Math.round(m.allocation_pct || 0));
+                const col = mp > 100 ? 'text-purple-700' : 'text-indigo-600';
+                return `<span class="bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold px-2 py-0.5 rounded-lg" title="${m.name} - ${fmtHrs(m.hours)}h of a ${fmtHrs(m.capacity_hours)}h week on this project">${m.name} <span class="${col} font-bold">(${mp}%)</span> <span class="text-slate-400 font-normal">${fmtHrs(m.hours)}h</span></span>`;
+              }).join(" ");
+            projectRows += `
+              <div class="border border-slate-200/80 rounded-xl p-3 bg-slate-50/60">
+                <div class="flex flex-wrap justify-between items-start gap-2">
+                  <div class="font-semibold text-xs text-slate-900 flex-1 min-w-[220px]">${p.project_name}</div>
+                  <div class="flex items-center gap-2 text-[11px]">
+                    ${pmCell}
+                    <span class="bg-white border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-lg">${fmtHrs(p.total_hours)} hrs/wk</span>
+                  </div>
+                </div>
+                <div class="text-[10px] mt-1">${endCell}</div>
+                <div class="flex flex-wrap gap-1.5 mt-2">${memberPills || '<span class="text-[11px] text-slate-400 italic">No one staffed this week</span>'}</div>
+              </div>`;
+          });
+
+        const projectSection = projects.length
+          ? `<div class="pt-1">
+               <button type="button" onclick="togglePortfolioProjects('${accKey}')"
+                       class="w-full flex items-center justify-between gap-2 text-[11px] font-bold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-150 rounded-xl px-3 py-1.5 transition">
+                 <span>${projects.length} ${projects.length === 1 ? 'project' : 'projects'} &bull; click to expand</span>
+                 <span id="chev-${accKey}" class="transition-transform">▾</span>
+               </button>
+               <div id="projects-${accKey}" class="hidden flex-col gap-2 mt-2">${projectRows}</div>
+             </div>`
+          : ``;
 
         // Region summary counts - by real hub, not a hardcoded "EMEA" label.
         const pEmea = (c.EMEA || []).length;
@@ -4226,10 +4254,32 @@
             <span class="text-[11px] text-slate-400 font-medium py-1">Staffed Team:</span>
             ${peoplePills || '<span class="text-xs text-slate-400 italic py-1">No active allocations</span>'}
           </div>
+          ${projectSection}
         `;
         container.appendChild(card);
       });
     }
+
+    // Expand an account into its real projects. Grouped on project_id, so the
+    // count here is the number of ACTUAL projects, not the inflated count you
+    // get from project_name (which carries an appended assignment id).
+    function togglePortfolioProjects(accKey) {
+      const panel = document.getElementById(`projects-${accKey}`);
+      const chev = document.getElementById(`chev-${accKey}`);
+      if (!panel) return;
+      const isHidden = panel.classList.contains("hidden");
+      panel.classList.toggle("hidden", !isHidden);
+      panel.classList.toggle("flex", isHidden);
+      if (chev) chev.style.transform = isHidden ? "rotate(180deg)" : "";
+      const label = panel.previousElementSibling?.querySelector("span");
+      if (label) {
+        label.innerHTML = label.innerHTML.replace(
+          isHidden ? "click to expand" : "click to collapse",
+          isHidden ? "click to collapse" : "click to expand"
+        );
+      }
+    }
+    window.togglePortfolioProjects = togglePortfolioProjects;
 
     let timelineViewMode = "delivery";
 

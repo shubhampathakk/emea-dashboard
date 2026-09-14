@@ -208,7 +208,23 @@ def query_emea_delivery_data(
         -- No COALESCE onto project_name: an assignment with no account is not
         -- evidence of a customer account.
         ANY_VALUE(account_name) AS account_name,
-        ANY_VALUE(COALESCE(engagement_manager, 'Delivery Lead')) AS engagement_manager_name,
+        -- Real people on the project. NULLIF(TRIM(...)) matters: these columns
+        -- hold '' far more often than NULL, so a plain COALESCE fell through to
+        -- a placeholder and the UI showed "Delivery Lead" on 108 of 163 rows.
+        -- Leave them NULL when absent and let the UI say "Unassigned".
+        ANY_VALUE(NULLIF(TRIM(engagement_manager), ''))      AS engagement_manager_name,
+        ANY_VALUE(NULLIF(TRIM(pso_engineering_manager), '')) AS pso_engineering_manager,
+        -- project_manager is 100% populated but 13% of it is the literal string
+        -- "Please Update Project Manager" / "No PM" entered at source. Treat
+        -- those as unassigned rather than rendering them as a person's name.
+        ANY_VALUE(
+          CASE
+            WHEN LOWER(TRIM(project_manager)) LIKE '%please update%' THEN NULL
+            WHEN LOWER(TRIM(project_manager)) LIKE 'no pm%'          THEN NULL
+            ELSE NULLIF(TRIM(project_manager), '')
+          END
+        ) AS project_manager,
+        ANY_VALUE(NULLIF(TRIM(project_manager_ldap), '')) AS project_manager_ldap,
         -- Stored as STRING in the source; parse defensively.
         ANY_VALUE(SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(project_start_date AS STRING), 1, 10))) AS project_start_date,
         ANY_VALUE(SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(CAST(project_end_date AS STRING), 1, 10))) AS project_end_date,
@@ -247,6 +263,9 @@ def query_emea_delivery_data(
         p.project_name,
         p.account_name,
         p.engagement_manager_name,
+        p.pso_engineering_manager,
+        p.project_manager,
+        p.project_manager_ldap,
         p.project_start_date,
         p.project_end_date
       FROM week_assignments a
@@ -294,7 +313,17 @@ def query_emea_delivery_data(
          ),
          NULL
       ) AS project_name,
-      IF(a.project_id IS NOT NULL, COALESCE(a.engagement_manager_name, 'PSO Lead'), NULL) AS engagement_manager_name,
+      -- The project name WITHOUT the assignment-id suffix. project_name above
+      -- appends the assignment id, which is why 47 real projects render as 153
+      -- differently-named rows. The drill-down groups on project_id and labels
+      -- with this.
+      IF(a.project_id IS NOT NULL, COALESCE(a.project_name, 'Cloud Transformation'), NULL) AS base_project_name,
+      -- Real people. NULL means genuinely unassigned at source - the UI must
+      -- say so rather than substituting a placeholder name.
+      a.engagement_manager_name AS engagement_manager_name,
+      a.pso_engineering_manager AS pso_engineering_manager,
+      a.project_manager         AS project_manager,
+      a.project_manager_ldap    AS project_manager_ldap,
       CAST(a.project_start_date AS STRING) AS project_start_date,
       CAST(a.project_end_date AS STRING) AS project_end_date,
       -- NULL when there is no assignment. Previously this fell back to the
