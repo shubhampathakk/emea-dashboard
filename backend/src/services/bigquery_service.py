@@ -734,6 +734,158 @@ def query_emea_pipeline_data(
         logger.warning(f"Pipeline query failed: {e}")
         return []
 
+def query_pipeline_resource_demand(
+    client: bigquery.Client,
+    horizon_weeks: int = 52,
+) -> List[Dict[str, Any]]:
+    """Forward resource demand for EMEA Delivery-Center opportunities still in pipeline.
+
+    This answers "how many people is each future project asking for, in which
+    skill area, and when" using the real Resource Requests rather than a
+    heuristic derived from deal value.
+
+    Two things about this dataset are load-bearing and easy to get wrong:
+
+    1. JOIN ON THE OPPORTUNITY, NOT THE PROJECT. On pre-signature GSD requests
+       2,410 of 2,757 rows carry a BLANK (empty-string, never NULL) project_id,
+       because the project record does not exist until the deal is signed.
+       Joining `weekly_resource_requests` to `projects` on project_id silently
+       drops 87% of the demand and makes it look as though pipeline deals have
+       no staffing asks at all. Measured coverage of the stage-03 cohort:
+       project key 2/110, opportunity key 76/108.
+
+    2. "GSD" IS A PROPERTY OF THE ROLE, NOT THE REGION. request_region is the
+       *requesting* region and reads 'Delivery Center' for these rows anyway.
+       The Delivery Center roles are `DC Googler - ...` (FTE) and
+       `DC Flex - ...` (TVC). `DC Architect - TOC` is excluded: it is the single
+       largest DC role by volume and is explicitly out of scope for GSD
+       staffing (it never appears in the GSD RR tracker).
+
+    Returned grain is one row per (request, role), carrying its own weekly hour
+    spread so the UI can answer "what is the demand in week W" without another
+    round-trip. `derived_weekly_request_hours` is the SUM-safe weekly column;
+    `actual_total_request_hours` is a header total repeated on every row and
+    must never be summed.
+    """
+    try:
+        weeks = int(horizon_weeks)
+    except (TypeError, ValueError):
+        weeks = 52
+    weeks = max(1, min(weeks, 104))
+
+    query = """
+    WITH pt_rr AS (
+      SELECT MAX(_PARTITIONTIME) AS pt
+      FROM `concord-prod.service_cloudbi.weekly_resource_requests`
+    ),
+    pt_pr AS (
+      SELECT MAX(_PARTITIONTIME) AS pt
+      FROM `concord-prod.service_cloudbi.projects`
+    ),
+    -- One row per pipeline opportunity. projects is at project grain and an
+    -- opportunity can carry several projects, so collapse before joining or
+    -- the weekly hours fan out.
+    pipe AS (
+      SELECT
+        NULLIF(TRIM(eighteen_digit_opp_id), '') AS opp_id,
+        ANY_VALUE(opp_name)                     AS opp_name,
+        ANY_VALUE(account_name)                 AS account_name,
+        ANY_VALUE(opportunity_stage)            AS opportunity_stage,
+        ANY_VALUE(opportunity_sub_region)       AS opp_sub_region
+      FROM `concord-prod.service_cloudbi.projects`
+      WHERE _PARTITIONTIME   = (SELECT pt FROM pt_pr)
+        AND project_region   = 'EMEA'
+        AND stage_simplified = 'Pipeline'
+        AND offering         = 'Delivery Center'
+      GROUP BY opp_id
+      HAVING opp_id IS NOT NULL
+    ),
+    rr AS (
+      SELECT
+        NULLIF(TRIM(opportunity_id), '')        AS opp_id,
+        request_name,
+        requested_resource_role                 AS role,
+        request_week_starting                   AS wk,
+        SUM(derived_weekly_request_hours)       AS hrs,
+        ANY_VALUE(request_practice)             AS practice,
+        ANY_VALUE(primary_skill_certification)  AS skill,
+        ANY_VALUE(request_status)               AS request_status,
+        ANY_VALUE(approval_status)              AS approval_status,
+        ANY_VALUE(staffing_type)                AS staffing_type,
+        ANY_VALUE(request_priority)             AS priority,
+        ANY_VALUE(request_sub_region)           AS req_sub_region,
+        ANY_VALUE(ff_start_date)                AS ff_start,
+        ANY_VALUE(ff_end_date)                  AS ff_end,
+        ANY_VALUE(NULLIF(TRIM(held_resource_name), ''))      AS held_name,
+        ANY_VALUE(NULLIF(TRIM(requested_resource_name), '')) AS named_resource
+      FROM `concord-prod.service_cloudbi.weekly_resource_requests`
+      WHERE _PARTITIONTIME = (SELECT pt FROM pt_rr)
+        AND (requested_resource_role LIKE 'DC Googler%'
+          OR requested_resource_role LIKE 'DC Flex%')
+        AND requested_resource_role NOT LIKE '%TOC%'
+        AND request_status  NOT LIKE 'Cancelled%'
+        AND approval_status != 'Rejected'
+        AND request_week_starting IS NOT NULL
+        AND derived_weekly_request_hours > 0
+        -- request_week_starting is Sunday-based, matching BigQuery's default WEEK.
+        AND request_week_starting >= DATE_TRUNC(CURRENT_DATE(), WEEK)
+        AND request_week_starting <  DATE_ADD(DATE_TRUNC(CURRENT_DATE(), WEEK),
+                                              INTERVAL @horizon_weeks WEEK)
+      GROUP BY opp_id, request_name, role, wk
+    )
+    SELECT
+      r.request_name,
+      r.role,
+      p.opp_id,
+      p.opp_name,
+      p.account_name,
+      p.opportunity_stage,
+      p.opp_sub_region,
+      ANY_VALUE(r.practice)        AS practice,
+      ANY_VALUE(r.skill)           AS skill,
+      ANY_VALUE(r.request_status)  AS request_status,
+      ANY_VALUE(r.approval_status) AS approval_status,
+      ANY_VALUE(r.staffing_type)   AS staffing_type,
+      ANY_VALUE(r.priority)        AS priority,
+      ANY_VALUE(r.req_sub_region)  AS req_sub_region,
+      CAST(ANY_VALUE(r.ff_start) AS STRING) AS ff_start,
+      CAST(ANY_VALUE(r.ff_end)   AS STRING) AS ff_end,
+      ANY_VALUE(r.held_name)       AS held_name,
+      ANY_VALUE(r.named_resource)  AS named_resource,
+      ROUND(SUM(r.hrs), 1)         AS horizon_hours,
+      COUNT(*)                     AS active_weeks,
+      -- No ORDER BY inside the aggregate: ordered aggregates have failed
+      -- silently against this dataset before. The caller sorts.
+      ARRAY_AGG(STRUCT(CAST(r.wk AS STRING) AS w, ROUND(r.hrs, 1) AS h)) AS weeks
+    FROM pipe p
+    JOIN rr r USING (opp_id)
+    GROUP BY r.request_name, r.role, p.opp_id, p.opp_name,
+             p.account_name, p.opportunity_stage, p.opp_sub_region
+    """
+
+    try:
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("horizon_weeks", "INT64", weeks),
+            ]
+        )
+        results = client.query(query, job_config=job_config).result(timeout=90)
+        out: List[Dict[str, Any]] = []
+        for row in results:
+            d = dict(row)
+            spread = [
+                {"w": str(w.get("w") or ""), "h": float(w.get("h") or 0.0)}
+                for w in (d.get("weeks") or [])
+                if w and w.get("w")
+            ]
+            spread.sort(key=lambda x: x["w"])
+            d["weeks"] = spread
+            out.append(d)
+        return out
+    except Exception as e:
+        logger.warning(f"Pipeline resource-demand query failed: {e}")
+        return []
+
 def fetch_projects_by_ldap(
     ldap: str,
     client: bigquery.Client,

@@ -1705,7 +1705,14 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
           </svg>
-          Resource Demand &amp; Sizing Horizon
+          Deal Sizing Horizon
+        </button>
+
+        <button onclick="switchGtmSubtab('demand')" id="gtm-subtab-demand" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-transparent text-slate-600 hover:bg-slate-50">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          Requested Resources
         </button>
       </div>
 
@@ -1933,6 +1940,140 @@
           <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
             <div id="gtm-ledger-pagination-info">Showing opportunities...</div>
             <div class="flex items-center gap-1.5" id="gtm-ledger-pagination-btns"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================================================== -->
+      <!-- GTM SUB-VIEW 4: REQUESTED RESOURCES (real RR demand)  -->
+      <!-- ==================================================== -->
+      <div id="gtm-view-demand" class="hidden flex flex-col gap-5">
+
+        <!-- Controls -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col gap-4">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
+              <h3 class="text-base font-extrabold font-title text-slate-900 flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-violet-50 text-violet-600 border border-violet-200 flex items-center justify-center shrink-0">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                </span>
+                Requested Resources on Pipeline Deals
+              </h3>
+              <p class="text-xs text-slate-500 mt-1.5 max-w-3xl leading-relaxed" id="demand-subtitle">
+                Actual Resource Requests raised against EMEA Delivery Center opportunities that are still in pipeline.
+              </p>
+            </div>
+            <div class="flex flex-col items-end gap-1.5 shrink-0">
+              <span id="demand-source-badge" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200">Live resource requests</span>
+              <span class="text-[10px] text-slate-400">weekly_resource_requests &times; projects</span>
+            </div>
+          </div>
+
+          <!-- Week selector -->
+          <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 mt-1 pt-4">
+            <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mr-1">Week of</span>
+            <button onclick="stepDemandWeek(-1)" title="Previous week" class="w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <input type="date" id="demand-date" onchange="onDemandDateChange()" class="bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500">
+            <button onclick="stepDemandWeek(1)" title="Next week" class="w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+            <button onclick="jumpDemandWeek('now')" class="text-[11px] font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition cursor-pointer">This week</button>
+            <button onclick="jumpDemandWeek('peak')" class="text-[11px] font-bold px-3 py-2 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 transition cursor-pointer">Jump to peak</button>
+            <span id="demand-week-label" class="text-[11px] text-slate-500 font-medium ml-1"></span>
+          </div>
+
+          <!-- Filters -->
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Stage</span>
+              <select id="demand-filter-stage" onchange="onDemandFilterChange()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"></select>
+            </div>
+            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Hub</span>
+              <select id="demand-filter-hub" onchange="onDemandFilterChange()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"></select>
+            </div>
+            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Field</span>
+              <select id="demand-filter-practice" onchange="onDemandFilterChange()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"></select>
+            </div>
+            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Type</span>
+              <select id="demand-filter-type" onchange="onDemandFilterChange()" class="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none">
+                <option value="ALL">All</option>
+                <option value="FTE">FTE (DC Googler)</option>
+                <option value="TVC">TVC (DC Flex)</option>
+              </select>
+            </div>
+            <div class="relative grow min-w-[200px]">
+              <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <input type="text" id="demand-search" oninput="onDemandFilterChange()" placeholder="Search RR number, account, opportunity, role..." class="w-full bg-slate-50 text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:border-indigo-500">
+            </div>
+            <button onclick="resetDemandFilters()" class="text-[11px] font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer">Reset</button>
+          </div>
+        </div>
+
+        <!-- KPI strip for the selected week -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3" id="demand-kpi-strip"></div>
+
+        <!-- Weekly demand curve -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-sm font-extrabold font-title text-slate-900">Forward demand by week</h4>
+            <span class="text-[11px] text-slate-500">Click any week to inspect it &middot; FTE = requested hours &divide; 40</span>
+          </div>
+          <div id="demand-curve" class="flex flex-col gap-1 max-h-80 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- Breakdowns -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col gap-3">
+            <h4 class="text-sm font-extrabold font-title text-slate-900">Demand by field</h4>
+            <p class="text-[11px] text-slate-500 -mt-2">Practice requested on the RR</p>
+            <div id="demand-by-practice" class="flex flex-col gap-3 pt-1"></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col gap-3">
+            <h4 class="text-sm font-extrabold font-title text-slate-900">Demand by role &amp; hub</h4>
+            <p class="text-[11px] text-slate-500 -mt-2">Which delivery hub is asked to supply</p>
+            <div id="demand-by-role" class="flex flex-col gap-3 pt-1"></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col gap-3">
+            <h4 class="text-sm font-extrabold font-title text-slate-900">Demand by account</h4>
+            <p class="text-[11px] text-slate-500 -mt-2">Top accounts in the selected week</p>
+            <div id="demand-by-account" class="flex flex-col gap-3 pt-1"></div>
+          </div>
+        </div>
+
+        <!-- Request detail -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col gap-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 class="text-sm font-extrabold font-title text-slate-900">Open requests in the selected week</h4>
+              <p class="text-[11px] text-slate-500 mt-1" id="demand-detail-caption">&mdash;</p>
+            </div>
+            <div class="text-xs text-slate-500">
+              Showing <strong class="text-violet-600" id="demand-detail-count">&mdash;</strong> requests
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3 font-bold">Request</th>
+                  <th class="py-2.5 px-3 font-bold">Account &amp; Opportunity</th>
+                  <th class="py-2.5 px-3 font-bold">Field</th>
+                  <th class="py-2.5 px-3 font-bold">Role &amp; Hub</th>
+                  <th class="py-2.5 px-3 font-bold text-right">This week</th>
+                  <th class="py-2.5 px-3 font-bold">Request window</th>
+                  <th class="py-2.5 px-3 font-bold">Status</th>
+                </tr>
+              </thead>
+              <tbody id="demand-detail-tbody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+            </table>
           </div>
         </div>
 
@@ -5835,7 +5976,7 @@
       currentGtmSubtab = subtabKey;
 
       // Update subtab buttons
-      ['exec', 'workload', 'ledger'].forEach(k => {
+      ['exec', 'workload', 'ledger', 'demand'].forEach(k => {
         const btn = document.getElementById(`gtm-subtab-${k}`);
         const view = document.getElementById(`gtm-view-${k}`);
         if (!btn || !view) return;
@@ -5851,11 +5992,430 @@
 
       if (subtabKey === 'workload') renderGtmWorkloadsTable();
       if (subtabKey === 'ledger') renderGtmLedgerTable();
+      if (subtabKey === 'demand') renderDemandView();
     }
+
+    /* ==================================================================
+     * REQUESTED RESOURCES  (Pipeline & Demand -> sub-tab 4)
+     *
+     * Real forward demand, from Resource Requests raised against pipeline
+     * opportunities. Distinct from the "Deal Sizing Horizon" sub-tab, which
+     * models demand from deal value and close date.
+     *
+     * Units: a week's demand FTE is that week's requested hours / 40. A
+     * request is NOT one person - one request can span several roles and can
+     * ask for part-time hours - so nothing here counts requests as headcount.
+     * ================================================================== */
+    const DEMAND_STATE = {
+      week: null,
+      stage: null,
+      hub: "ALL",
+      practice: "ALL",
+      type: "ALL",
+      q: "",
+      token: "",
+    };
+    const DEMAND_DEFAULT_STAGE = "03 - Proposal/Negotiation";
+
+    function demandData() {
+      const d = (globalData.gtm || {}).resource_demand;
+      if (!d) return { available: false, requests: [], weeks: [], stages: [], practices: [], hubs: [] };
+      return {
+        available: !!d.available,
+        requests: d.requests || [],
+        weeks: d.weeks || [],
+        stages: d.stages || [],
+        practices: d.practices || [],
+        hubs: d.hubs || [],
+      };
+    }
+
+    function dEsc(v) {
+      return String(v === null || v === undefined ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function dFte(hours) { return Math.round(((hours || 0) / 40) * 10) / 10; }
+
+    /* request_week_starting is Sunday-based. Snap in UTC: a browser west of
+     * GMT would otherwise roll the date back a day and select the wrong week. */
+    function demandWeekStart(dateStr) {
+      if (!dateStr) return null;
+      const d = new Date(String(dateStr).slice(0, 10) + "T00:00:00Z");
+      if (isNaN(d.getTime())) return null;
+      d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+      return d.toISOString().slice(0, 10);
+    }
+
+    function demandPrettyWeek(w) {
+      if (!w) return "\u2014";
+      const d = new Date(w + "T00:00:00Z");
+      if (isNaN(d.getTime())) return w;
+      const end = new Date(d.getTime());
+      end.setUTCDate(end.getUTCDate() + 6);
+      const f = (x) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+      return f(d) + " \u2013 " + f(end) + " " + end.getUTCFullYear();
+    }
+
+    /* Snap an arbitrary date onto a week we actually hold data for. */
+    function demandNearestWeek(target) {
+      const weeks = demandData().weeks;
+      if (!weeks.length) return null;
+      if (weeks.indexOf(target) !== -1) return target;
+      if (!target) return weeks[0];
+      let best = weeks[0], bestGap = Infinity;
+      for (const w of weeks) {
+        const gap = Math.abs(new Date(w + "T00:00:00Z") - new Date(target + "T00:00:00Z"));
+        if (gap < bestGap) { bestGap = gap; best = w; }
+      }
+      return best;
+    }
+
+    function demandFilteredRequests() {
+      const s = DEMAND_STATE;
+      const q = (s.q || "").trim().toLowerCase();
+      return demandData().requests.filter((r) => {
+        if (s.stage && s.stage !== "ALL" && r.stage !== s.stage) return false;
+        if (s.hub !== "ALL" && r.hub !== s.hub) return false;
+        if (s.practice !== "ALL" && r.practice !== s.practice) return false;
+        if (s.type !== "ALL" && r.engagement_type !== s.type) return false;
+        if (q) {
+          const hay = [r.rr, r.account, r.opportunity, r.role, r.practice, r.stage, r.priority]
+            .join(" ").toLowerCase();
+          if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+      });
+    }
+
+    function demandWeeklyTotals(reqs) {
+      const totals = {};
+      for (const r of reqs) {
+        for (const w in r.weeks) {
+          totals[w] = (totals[w] || 0) + (r.weeks[w] || 0);
+        }
+      }
+      return totals;
+    }
+
+    /* ---------------------------------------------------------- controls */
+    function demandPopulateFilters(force) {
+      const d = demandData();
+      const token = d.weeks.length + ":" + d.requests.length + ":" + d.stages.join(",");
+      if (!force && token === DEMAND_STATE.token) return;
+      DEMAND_STATE.token = token;
+
+      const stageSel = document.getElementById("demand-filter-stage");
+      if (stageSel) {
+        if (DEMAND_STATE.stage === null && d.stages.length) {
+          DEMAND_STATE.stage = d.stages.indexOf(DEMAND_DEFAULT_STAGE) !== -1
+            ? DEMAND_DEFAULT_STAGE : "ALL";
+        }
+        stageSel.innerHTML = '<option value="ALL">All pipeline stages</option>' +
+          d.stages.map((s) => '<option value="' + dEsc(s) + '">' + dEsc(s) + "</option>").join("");
+        stageSel.value = DEMAND_STATE.stage || "ALL";
+      }
+      const hubSel = document.getElementById("demand-filter-hub");
+      if (hubSel) {
+        hubSel.innerHTML = '<option value="ALL">All hubs</option>' +
+          d.hubs.map((s) => '<option value="' + dEsc(s) + '">' + dEsc(s) + "</option>").join("");
+        hubSel.value = DEMAND_STATE.hub;
+      }
+      const pracSel = document.getElementById("demand-filter-practice");
+      if (pracSel) {
+        pracSel.innerHTML = '<option value="ALL">All fields</option>' +
+          d.practices.map((s) => '<option value="' + dEsc(s) + '">' + dEsc(s) + "</option>").join("");
+        pracSel.value = DEMAND_STATE.practice;
+      }
+    }
+
+    function onDemandFilterChange() {
+      const g = (id) => { const e = document.getElementById(id); return e ? e.value : null; };
+      DEMAND_STATE.stage = g("demand-filter-stage") || "ALL";
+      DEMAND_STATE.hub = g("demand-filter-hub") || "ALL";
+      DEMAND_STATE.practice = g("demand-filter-practice") || "ALL";
+      DEMAND_STATE.type = g("demand-filter-type") || "ALL";
+      DEMAND_STATE.q = g("demand-search") || "";
+      renderDemandView(true);
+    }
+
+    function resetDemandFilters() {
+      const d = demandData();
+      DEMAND_STATE.stage = d.stages.indexOf(DEMAND_DEFAULT_STAGE) !== -1 ? DEMAND_DEFAULT_STAGE : "ALL";
+      DEMAND_STATE.hub = "ALL";
+      DEMAND_STATE.practice = "ALL";
+      DEMAND_STATE.type = "ALL";
+      DEMAND_STATE.q = "";
+      const se = document.getElementById("demand-search");
+      if (se) se.value = "";
+      const te = document.getElementById("demand-filter-type");
+      if (te) te.value = "ALL";
+      demandPopulateFilters(true);
+      renderDemandView(true);
+    }
+
+    function onDemandDateChange() {
+      const el = document.getElementById("demand-date");
+      if (!el || !el.value) return;
+      DEMAND_STATE.week = demandNearestWeek(demandWeekStart(el.value));
+      renderDemandView(true);
+    }
+
+    function selectDemandWeek(w) {
+      DEMAND_STATE.week = w;
+      renderDemandView(true);
+    }
+
+    function stepDemandWeek(delta) {
+      const weeks = demandData().weeks;
+      const i = weeks.indexOf(DEMAND_STATE.week);
+      if (i === -1) { DEMAND_STATE.week = weeks[0] || null; }
+      else { DEMAND_STATE.week = weeks[Math.max(0, Math.min(weeks.length - 1, i + delta))]; }
+      renderDemandView(true);
+    }
+
+    function jumpDemandWeek(which) {
+      const weeks = demandData().weeks;
+      if (!weeks.length) return;
+      if (which === "now") {
+        DEMAND_STATE.week = demandNearestWeek(demandWeekStart(new Date().toISOString().slice(0, 10)));
+      } else {
+        const totals = demandWeeklyTotals(demandFilteredRequests());
+        let best = null, bestH = -1;
+        for (const w of weeks) {
+          const h = totals[w] || 0;
+          if (h > bestH) { bestH = h; best = w; }
+        }
+        DEMAND_STATE.week = best || weeks[0];
+      }
+      renderDemandView(true);
+    }
+
+    /* ------------------------------------------------------------ render */
+    function demandBarRow(label, sublabel, hours, maxHours, colour) {
+      const pct = maxHours > 0 ? Math.max(2, Math.round((hours / maxHours) * 100)) : 0;
+      return '<div class="flex flex-col gap-1">' +
+        '<div class="flex items-baseline justify-between gap-3">' +
+          '<span class="text-xs font-semibold text-slate-700 truncate" title="' + dEsc(label) + '">' + dEsc(label) + "</span>" +
+          '<span class="text-xs font-extrabold text-slate-900 shrink-0">' + dFte(hours).toFixed(1) +
+            ' <span class="text-[10px] font-medium text-slate-400">FTE</span></span>' +
+        "</div>" +
+        '<div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">' +
+          '<div class="h-full ' + colour + ' rounded-full" style="width:' + pct + '%"></div>' +
+        "</div>" +
+        (sublabel ? '<span class="text-[10px] text-slate-400">' + dEsc(sublabel) + "</span>" : "") +
+      "</div>";
+    }
+
+    function renderDemandEmpty(msg, tone) {
+      const badge = document.getElementById("demand-source-badge");
+      if (badge) {
+        badge.textContent = tone === "warn" ? "Demand data unavailable" : "No matching requests";
+        badge.className = "text-[10px] font-bold px-2.5 py-1 rounded-lg border " +
+          (tone === "warn" ? "bg-amber-50 text-amber-700 border-amber-200"
+                           : "bg-slate-100 text-slate-600 border-slate-200");
+      }
+      const strip = document.getElementById("demand-kpi-strip");
+      if (strip) {
+        strip.innerHTML = '<div class="col-span-2 lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-6 text-center">' +
+          '<p class="text-sm font-bold text-slate-700">' + dEsc(msg) + "</p></div>";
+      }
+      ["demand-curve", "demand-by-practice", "demand-by-role", "demand-by-account"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<p class="text-xs text-slate-400">No data.</p>';
+      });
+      const tb = document.getElementById("demand-detail-tbody");
+      if (tb) tb.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-xs text-slate-400">No requests to show.</td></tr>';
+      const c = document.getElementById("demand-detail-count");
+      if (c) c.textContent = "0";
+      const cap = document.getElementById("demand-detail-caption");
+      if (cap) cap.textContent = msg;
+    }
+
+    function renderDemandView(skipFilterSync) {
+      const d = demandData();
+
+      if (!d.available || !d.requests.length) {
+        renderDemandEmpty(
+          d.available
+            ? "No resource requests found for pipeline opportunities in the next 52 weeks."
+            : "Resource-request demand could not be loaded. This tab needs live BigQuery access; a cached snapshot does not carry it.",
+          d.available ? "none" : "warn");
+        return;
+      }
+
+      demandPopulateFilters(false);
+
+      const badge = document.getElementById("demand-source-badge");
+      if (badge) {
+        badge.textContent = "Live resource requests";
+        badge.className = "text-[10px] font-bold px-2.5 py-1 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200";
+      }
+
+      // Resolve the selected week.
+      if (!DEMAND_STATE.week || d.weeks.indexOf(DEMAND_STATE.week) === -1) {
+        DEMAND_STATE.week = demandNearestWeek(demandWeekStart(new Date().toISOString().slice(0, 10)));
+      }
+      const week = DEMAND_STATE.week;
+      const dateEl = document.getElementById("demand-date");
+      if (dateEl && dateEl.value !== week) dateEl.value = week || "";
+      const lbl = document.getElementById("demand-week-label");
+      if (lbl) lbl.textContent = demandPrettyWeek(week) + "  \u00b7  snapped to the request week (Sun\u2013Sat)";
+
+      const reqs = demandFilteredRequests();
+      const inWeek = reqs.filter((r) => (r.weeks[week] || 0) > 0);
+
+      // ---- KPI strip -------------------------------------------------
+      let hours = 0, fteH = 0, tvcH = 0;
+      const opps = new Set(), accts = new Set(), rrs = new Set(), pracs = new Set();
+      for (const r of inWeek) {
+        const h = r.weeks[week] || 0;
+        hours += h;
+        if (r.engagement_type === "TVC") tvcH += h; else fteH += h;
+        opps.add(r.opportunity_id); accts.add(r.account); rrs.add(r.rr); pracs.add(r.practice);
+      }
+      const kpi = (label, value, sub, tone) =>
+        '<div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col gap-1">' +
+          '<span class="text-[10px] font-bold uppercase tracking-wide text-slate-400">' + dEsc(label) + "</span>" +
+          '<span class="text-2xl font-extrabold font-title ' + (tone || "text-slate-900") + '">' + dEsc(value) + "</span>" +
+          '<span class="text-[11px] text-slate-500">' + dEsc(sub) + "</span>" +
+        "</div>";
+      const strip = document.getElementById("demand-kpi-strip");
+      if (strip) {
+        strip.innerHTML =
+          kpi("Demand this week", dFte(hours).toFixed(1) + " FTE", Math.round(hours) + " requested hours", "text-violet-600") +
+          kpi("Open requests", String(rrs.size), inWeek.length + " request \u00d7 role lines") +
+          kpi("Opportunities", String(opps.size), accts.size + " accounts") +
+          kpi("Fields in demand", String(pracs.size), "distinct practices") +
+          kpi("FTE vs TVC", dFte(fteH).toFixed(1) + " / " + dFte(tvcH).toFixed(1),
+              "DC Googler vs DC Flex");
+      }
+
+      // ---- weekly curve ----------------------------------------------
+      const totals = demandWeeklyTotals(reqs);
+      const curve = document.getElementById("demand-curve");
+      if (curve) {
+        const nonZero = d.weeks.filter((w) => (totals[w] || 0) > 0);
+        if (!nonZero.length) {
+          curve.innerHTML = '<p class="text-xs text-slate-400">No demand in the horizon for these filters.</p>';
+        } else {
+          const first = d.weeks.indexOf(nonZero[0]);
+          const last = d.weeks.indexOf(nonZero[nonZero.length - 1]);
+          const span = d.weeks.slice(first, last + 1);
+          const maxH = Math.max.apply(null, span.map((w) => totals[w] || 0));
+          curve.innerHTML = span.map((w) => {
+            const h = totals[w] || 0;
+            const pct = maxH > 0 ? Math.max(1, Math.round((h / maxH) * 100)) : 0;
+            const sel = w === week;
+            return '<button onclick="selectDemandWeek(\'' + w + '\')" class="w-full flex items-center gap-3 px-2 py-1 rounded-lg transition cursor-pointer text-left ' +
+              (sel ? "bg-violet-50 ring-1 ring-violet-200" : "hover:bg-slate-50") + '">' +
+              '<span class="text-[10px] font-mono w-[76px] shrink-0 ' + (sel ? "text-violet-700 font-bold" : "text-slate-400") + '">' + w + "</span>" +
+              '<span class="grow h-2.5 bg-slate-100 rounded-full overflow-hidden">' +
+                '<span class="block h-full rounded-full ' + (sel ? "bg-violet-600" : "bg-violet-300") + '" style="width:' + pct + '%"></span>' +
+              "</span>" +
+              '<span class="text-[11px] font-bold w-[52px] text-right shrink-0 ' + (sel ? "text-violet-700" : "text-slate-600") + '">' + dFte(h).toFixed(1) + "</span>" +
+            "</button>";
+          }).join("");
+        }
+      }
+
+      // ---- breakdowns -------------------------------------------------
+      const group = (keyFn, subFn) => {
+        const m = {};
+        for (const r of inWeek) {
+          const k = keyFn(r) || "Unspecified";
+          if (!m[k]) m[k] = { h: 0, rrs: new Set() };
+          m[k].h += (r.weeks[week] || 0);
+          m[k].rrs.add(r.rr);
+        }
+        return Object.keys(m).map((k) => ({ k: k, h: m[k].h, n: m[k].rrs.size }))
+          .sort((a, b) => b.h - a.h);
+      };
+      const paint = (id, rows, colour, limit) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!rows.length) { el.innerHTML = '<p class="text-xs text-slate-400">Nothing in this week.</p>'; return; }
+        const maxH = rows[0].h;
+        const shown = limit ? rows.slice(0, limit) : rows;
+        el.innerHTML = shown.map((r) =>
+          demandBarRow(r.k, r.n + (r.n === 1 ? " request" : " requests"), r.h, maxH, colour)).join("") +
+          (limit && rows.length > limit
+            ? '<p class="text-[10px] text-slate-400 pt-1">+ ' + (rows.length - limit) + " more</p>" : "");
+      };
+      paint("demand-by-practice", group((r) => r.practice), "bg-violet-500", 10);
+      paint("demand-by-role", group((r) => r.role), "bg-indigo-500", 10);
+      paint("demand-by-account", group((r) => r.account), "bg-sky-500", 8);
+
+      // ---- detail table -----------------------------------------------
+      const tb = document.getElementById("demand-detail-tbody");
+      const cnt = document.getElementById("demand-detail-count");
+      const cap = document.getElementById("demand-detail-caption");
+      if (cap) {
+        cap.textContent = "Week of " + demandPrettyWeek(week) +
+          (DEMAND_STATE.stage && DEMAND_STATE.stage !== "ALL" ? "  \u00b7  " + DEMAND_STATE.stage : "  \u00b7  all pipeline stages");
+      }
+      if (cnt) cnt.textContent = String(inWeek.length);
+      if (tb) {
+        if (!inWeek.length) {
+          tb.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-xs text-slate-400">No requests active in this week for the current filters.</td></tr>';
+        } else {
+          const sorted = inWeek.slice().sort((a, b) => (b.weeks[week] || 0) - (a.weeks[week] || 0));
+          tb.innerHTML = sorted.map((r) => {
+            const h = r.weeks[week] || 0;
+            const statusTone = r.approval_status === "Approved"
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+              : (r.approval_status === "Recalled" ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                  : "bg-slate-100 text-slate-600 border-slate-200");
+            const hubTone = r.hub === "EMEA" ? "bg-blue-50 text-blue-700 border-blue-200"
+                                             : "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200";
+            return "<tr class=\"hover:bg-slate-50/70 align-top\">" +
+              '<td class="py-2.5 px-3"><span class="font-mono font-bold text-slate-900">' + dEsc(r.rr) + "</span>" +
+                (r.earmarked_to ? '<div class="text-[10px] text-emerald-600 font-semibold mt-0.5">Earmarked: ' + dEsc(r.earmarked_to) + "</div>" : "") +
+              "</td>" +
+              '<td class="py-2.5 px-3 max-w-[260px]">' +
+                '<div class="font-semibold text-slate-800 truncate" title="' + dEsc(r.account) + '">' + dEsc(r.account) + "</div>" +
+                '<div class="text-[10px] text-slate-400 truncate" title="' + dEsc(r.opportunity) + '">' + dEsc(r.opportunity) + "</div>" +
+              "</td>" +
+              '<td class="py-2.5 px-3"><span class="text-[11px] font-semibold text-violet-700">' + dEsc(r.practice) + "</span></td>" +
+              '<td class="py-2.5 px-3">' +
+                '<div class="text-[11px] text-slate-700">' + dEsc(r.role) + "</div>" +
+                '<div class="flex gap-1 mt-1"><span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ' + hubTone + '">' + dEsc(r.hub) + "</span>" +
+                '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-slate-50 text-slate-600 border-slate-200">' + dEsc(r.engagement_type) + "</span></div>" +
+              "</td>" +
+              '<td class="py-2.5 px-3 text-right whitespace-nowrap">' +
+                '<div class="font-extrabold text-slate-900">' + dFte(h).toFixed(2) + '<span class="text-[10px] font-medium text-slate-400"> FTE</span></div>' +
+                '<div class="text-[10px] text-slate-400">' + Math.round(h) + " h</div>" +
+              "</td>" +
+              '<td class="py-2.5 px-3 whitespace-nowrap text-[11px] text-slate-600">' +
+                dEsc(r.start || "?") + '<span class="text-slate-300"> \u2192 </span>' + dEsc(r.end || "?") +
+                '<div class="text-[10px] text-slate-400">' + r.active_weeks + " wks in horizon</div>" +
+              "</td>" +
+              '<td class="py-2.5 px-3">' +
+                '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ' + statusTone + '">' + dEsc(r.approval_status || "\u2014") + "</span>" +
+                '<div class="text-[10px] text-slate-400 mt-0.5">' + dEsc(r.staffing_type || "") + "</div>" +
+              "</td>" +
+            "</tr>";
+          }).join("");
+        }
+      }
+    }
+
+    window.renderDemandView = renderDemandView;
+    window.onDemandFilterChange = onDemandFilterChange;
+    window.onDemandDateChange = onDemandDateChange;
+    window.selectDemandWeek = selectDemandWeek;
+    window.stepDemandWeek = stepDemandWeek;
+    window.jumpDemandWeek = jumpDemandWeek;
+    window.resetDemandFilters = resetDemandFilters;
 
     function renderGtmView() {
       const gtm = globalData.gtm || {};
       const summary = gtm.summary || {};
+
+      // New data may have arrived while this tab was open.
+      demandPopulateFilters(true);
+      if (currentGtmSubtab === 'demand') renderDemandView(true);
 
       // 1. Top 5 KPIs
       const gtmNum = (v) => (v === null || v === undefined || v === "") ? "—" : v;

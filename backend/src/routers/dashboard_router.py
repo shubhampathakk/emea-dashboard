@@ -14,6 +14,7 @@ from src.services.bigquery_service import (
     require_bq_client,
     query_emea_delivery_data, 
     query_emea_pipeline_data,
+    query_pipeline_resource_demand,
     query_org_options,
     extract_ldap,
     fetch_projects_by_ldap,
@@ -129,7 +130,130 @@ def capacity_from_row(row: Dict[str, Any]) -> float:
     return standard_capacity(row.get("role"))
 
 
-def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _demand_hub(role: str) -> str:
+    """Delivery hub that will actually supply the person, from the role suffix.
+
+    Roles look like 'DC Googler - High-Touch - JAPAC' or 'DC Flex - EMEA'. The
+    trailing token is the hub. EMEA demand is routinely routed to the India /
+    JAPAC hub, so this is a real and important distinction, not a data defect.
+    """
+    parts = [p.strip() for p in str(role or "").split(" - ") if p.strip()]
+    if len(parts) >= 2:
+        tail = parts[-1].upper()
+        if tail in ("EMEA", "JAPAC", "LATAM", "NORTHAM"):
+            return tail
+    return "Unspecified"
+
+
+def _demand_engagement_type(role: str) -> str:
+    """'DC Googler ...' is a Google FTE; 'DC Flex ...' is a vendor/TVC seat."""
+    r = str(role or "")
+    if r.startswith("DC Googler"):
+        return "FTE"
+    if r.startswith("DC Flex"):
+        return "TVC"
+    return "Other"
+
+
+def _build_resource_demand(demand_rows: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+    """Shapes the Resource-Request rows into the Pipeline & Demand payload.
+
+    One entry per (request, role), each carrying its own weekly hour spread so
+    the UI can resolve "demand in week W" locally instead of re-querying.
+
+    NOTE ON FTE: a week's FTE is hours/40. A request is NOT one person - a
+    single request can carry several weeks at part-time hours, and a request
+    can span more than one role. Counting requests as headcount overstates
+    demand, which is why every headline here is hours-derived.
+    """
+    if not demand_rows:
+        return {
+            "available": False,
+            "requests": [],
+            "weeks": [],
+            "stages": [],
+            "practices": [],
+            "hubs": [],
+            "accounts": [],
+        }
+
+    requests: List[Dict[str, Any]] = []
+    all_weeks = set()
+    stages, practices, hubs, accounts = set(), set(), set(), set()
+
+    for r in demand_rows:
+        role = str(r.get("role") or "").strip()
+        spread = {}
+        for wk in (r.get("weeks") or []):
+            w = str(wk.get("w") or "")[:10]
+            if not w:
+                continue
+            spread[w] = round(float(wk.get("h") or 0.0), 1)
+            all_weeks.add(w)
+        if not spread:
+            continue
+
+        rr_name = str(r.get("request_name") or "").strip() or "(unnamed request)"
+        practice = str(r.get("practice") or "").strip() or "Unspecified"
+        account = str(r.get("account_name") or "").strip() or "(Unnamed account)"
+        stage = str(r.get("opportunity_stage") or "").strip() or "(No stage)"
+        hub = _demand_hub(role)
+
+        stages.add(stage)
+        practices.add(practice)
+        hubs.add(hub)
+        accounts.add(account)
+
+        # Either of these means the request is already earmarked for somebody,
+        # so it is demand that is arguably already answered.
+        earmarked = (str(r.get("held_name") or "").strip()
+                     or str(r.get("named_resource") or "").strip())
+
+        requests.append({
+            "id": f"{rr_name}::{role}",
+            "rr": rr_name,
+            "role": role,
+            "hub": hub,
+            "engagement_type": _demand_engagement_type(role),
+            "opportunity_id": str(r.get("opp_id") or ""),
+            "opportunity": str(r.get("opp_name") or "").strip() or "(Unnamed opportunity)",
+            "account": account,
+            "stage": stage,
+            "sub_region": str(r.get("opp_sub_region") or "").strip(),
+            "request_sub_region": str(r.get("req_sub_region") or "").strip(),
+            "practice": practice,
+            # primary_skill_certification is blank on every row in this cohort,
+            # so the UI must fall back to practice as the "field" dimension.
+            "skill": str(r.get("skill") or "").strip(),
+            "request_status": str(r.get("request_status") or "").strip(),
+            "approval_status": str(r.get("approval_status") or "").strip(),
+            "staffing_type": str(r.get("staffing_type") or "").strip(),
+            "priority": str(r.get("priority") or "").strip(),
+            "start": str(r.get("ff_start") or "")[:10],
+            "end": str(r.get("ff_end") or "")[:10],
+            "horizon_hours": round(float(r.get("horizon_hours") or 0.0), 1),
+            "active_weeks": int(r.get("active_weeks") or 0),
+            "earmarked_to": earmarked,
+            "weeks": spread,
+        })
+
+    return {
+        "available": True,
+        "requests": requests,
+        "weeks": sorted(all_weeks),
+        "stages": sorted(stages),
+        "practices": sorted(practices),
+        "hubs": sorted(hubs),
+        "accounts": sorted(accounts),
+        "source": "weekly_resource_requests x projects (opportunity key)",
+    }
+
+
+def build_dashboard_payload(
+    delivery_rows: List[Dict[str, Any]],
+    pipeline_rows: List[Dict[str, Any]],
+    demand_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """Transforms delivery and pipeline records into the full frontend dashboard state."""
     resource_map: Dict[str, Dict[str, Any]] = {}
     customer_map: Dict[str, Dict[str, Any]] = {}
@@ -604,7 +728,14 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
 
         _, horizon_code, _ = _get_horizon_bucket(c_date, today)
 
-        c_hrs = float(p.get("consultant_hours_purchased") or 0.0) + float(p.get("sce_hours_purchased") or 0.0)
+        # sce_hours_purchased DUPLICATES consultant_hours_purchased: the two are
+        # exactly equal on 2,073 of 2,422 EMEA opportunities (86%) and only 33
+        # genuinely differ. Adding them double-counted the effort and inflated
+        # every demand-FTE figure on this tab. Take the larger, never the sum.
+        c_hrs = max(
+            float(p.get("consultant_hours_purchased") or 0.0),
+            float(p.get("sce_hours_purchased") or 0.0),
+        )
         if 0 < c_hrs <= 2000:
             req_fte = max(1.0, round(c_hrs / 160.0, 1))
         elif val > 0:
@@ -815,7 +946,11 @@ def build_dashboard_payload(delivery_rows: List[Dict[str, Any]], pipeline_rows: 
             "delivery_strategy": delivery_strategy_list,
             "demand_timeline": demand_timeline,
             "workloads": workloads,
-            "opportunities": opportunities
+            "opportunities": opportunities,
+            # Real requested-resource demand, from Resource Requests. Distinct
+            # from demand_timeline above, which is a heuristic sized off deal
+            # value and close date.
+            "resource_demand": _build_resource_demand(demand_rows)
         },
         # Previously "raw_data": delivery_rows shipped ~1,300 raw rows to every
         # browser purely so the UI could derive one date. Send the date.
@@ -908,7 +1043,10 @@ def get_dashboard_data(
         # EMEA-wide even when the roster is scoped to one org. The frontend
         # labels this so the supply-vs-demand gap is not read as like-for-like.
         pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
-        payload = build_dashboard_payload(delivery_rows, pipeline_rows)
+        # Forward staffing asks for pipeline deals. Independent of the close-date
+        # window above: a request's weeks are its own delivery window.
+        demand_rows = query_pipeline_resource_demand(bq_client)
+        payload = build_dashboard_payload(delivery_rows, pipeline_rows, demand_rows)
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
         payload["org_ldap"] = org or "ALL"
@@ -983,7 +1121,10 @@ def refresh_bq(
     try:
         delivery_rows = query_emea_delivery_data(bq_client, start_date=clean_start, end_date=clean_end, org_ldap=org)
         pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
-        payload = build_dashboard_payload(delivery_rows, pipeline_rows)
+        # Forward staffing asks for pipeline deals. Independent of the close-date
+        # window above: a request's weeks are its own delivery window.
+        demand_rows = query_pipeline_resource_demand(bq_client)
+        payload = build_dashboard_payload(delivery_rows, pipeline_rows, demand_rows)
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
         payload["org_ldap"] = org or "ALL"
