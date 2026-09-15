@@ -445,23 +445,12 @@
       </div>
     </div>
 
-    <!-- Light loading overlay for FILTER / SCOPE changes.
-         Deliberately not the full-screen boot loader: that one is reserved for
-         the very first paint. This dims and blurs the dashboard so the numbers
-         underneath are visibly "not current" while the new query runs, without
-         tearing the whole screen down. -->
-    <div id="filter-loading" style="z-index: 9990;" class="hidden fixed inset-0 bg-slate-900/25 backdrop-blur-[3px] flex items-start justify-center pt-32">
-      <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl px-5 py-4 flex items-center gap-3.5">
-        <svg class="w-5 h-5 animate-spin text-[#915EFF] shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-        </svg>
-        <div>
-          <div class="text-sm font-bold text-slate-800" id="filter-loading-title">Updating scope</div>
-          <div class="text-[11px] text-slate-500 mt-0.5" id="filter-loading-sub">Querying BigQuery — this takes a few seconds</div>
-        </div>
-      </div>
-    </div>
+    <!-- NOTE: there is deliberately NO full-screen overlay for filter / scope
+         changes. It used to dim and blur the whole dashboard, which hid the very
+         numbers the user was comparing against. Progress is now shown in place:
+         a spinner on the filter control itself (see #org-scope-spinner), a chip
+         underneath it (#org-scope-status) and the top progress bar. All three
+         are non-blocking, so the dashboard stays readable and usable. -->
 
     <!-- Login Overlay -->
     <div id="login-overlay" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: #0f172a;">
@@ -543,8 +532,29 @@
                     title="Show only people under the selected leaders (any depth in the reporting chain)">
               <svg class="w-3.5 h-3.5 text-[#c4b5fd] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
               <span id="org-scope-label" class="text-[#e2e8f0] font-bold truncate max-w-[190px]">Loading…</span>
-              <svg class="w-3 h-3 text-[#8b84b8] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              <!-- Chevron and spinner swap places: the spinner occupies the
+                   same slot so the button does not change width mid-load. -->
+              <svg id="org-scope-chevron" class="w-3 h-3 text-[#8b84b8] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              <svg id="org-scope-spinner" class="hidden w-3 h-3 shrink-0 animate-spin text-[#c4b5fd]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
             </button>
+
+            <!-- Non-blocking status chip, anchored under the filter it belongs
+                 to. pointer-events-none so it can never intercept a click on the
+                 dashboard behind it. -->
+            <div id="org-scope-status"
+                 style="display: none;"
+                 class="absolute right-0 top-full mt-1.5 z-40 pointer-events-none
+                        bg-[#151030]/95 border border-[#4c4190] rounded-lg shadow-xl
+                        px-2.5 py-1.5 items-center gap-2 whitespace-nowrap">
+              <svg class="w-3 h-3 shrink-0 animate-spin text-[#c4b5fd]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span id="org-scope-status-text" class="text-[10.5px] font-semibold text-[#e2e8f0]">Updating…</span>
+            </div>
 
             <div id="org-scope-menu"
                  class="hidden absolute right-0 mt-2 w-80 bg-[#151030] border border-[#372f6b] rounded-xl shadow-2xl z-50 overflow-hidden">
@@ -2243,34 +2253,60 @@
     window.setBootStage = setBootStage;
 
     // ---------------------------------------------------------------
-    // Light overlay for filter / scope changes.
+    // In-place busy indicator for filter / scope changes.
     //
-    // The full boot loader is now shown ONLY on the very first paint. Any
-    // later reload (scope change, date filter, Sync BQ) uses this instead, so
-    // the dashboard does not tear itself down every time a filter moves.
+    // The full boot loader runs ONLY on the very first paint. Later reloads
+    // (scope change, date filter, Sync BQ) show progress IN PLACE instead:
+    //   - a spinner in the filter button, where the chevron normally sits
+    //   - a small chip directly under that filter
+    //   - the existing top progress bar
+    //
+    // Deliberately NOT a full-screen overlay. The previous version dimmed and
+    // blurred the entire dashboard, which hid the numbers the user was
+    // comparing the new scope against, and blocked scrolling and clicking for
+    // the whole 13-16s the BigQuery round-trip takes. The stale figures stay
+    // fully readable now; the spinner is what says "these are about to change".
     // ---------------------------------------------------------------
     let filterLoaderWatchdog = null;
 
+    function setFilterBusy(busy, text) {
+      const chip = document.getElementById("org-scope-status");
+      const chipText = document.getElementById("org-scope-status-text");
+      const spinner = document.getElementById("org-scope-spinner");
+      const chevron = document.getElementById("org-scope-chevron");
+      const btn = document.getElementById("org-scope-btn");
+
+      // display is set inline rather than via Tailwind's `hidden`, because
+      // `hidden` and `flex` on one element resolve by stylesheet order and this
+      // build ships a prebuilt Tailwind bundle we do not control.
+      if (chip) chip.style.display = busy ? "flex" : "none";
+      if (chipText && text) chipText.textContent = text;
+      if (spinner) spinner.classList.toggle("hidden", !busy);
+      if (chevron) chevron.classList.toggle("hidden", busy);
+      if (btn) {
+        btn.setAttribute("aria-busy", busy ? "true" : "false");
+        // Block re-entry: a second Apply mid-flight would race the first.
+        btn.disabled = !!busy;
+        btn.classList.toggle("opacity-70", !!busy);
+        btn.classList.toggle("cursor-wait", !!busy);
+        btn.classList.toggle("cursor-pointer", !busy);
+      }
+    }
+
     function showFilterLoader(title, sub) {
-      const el = document.getElementById("filter-loading");
-      if (!el) return;
-      const t = document.getElementById("filter-loading-title");
-      const s = document.getElementById("filter-loading-sub");
-      if (t && title) t.textContent = title;
-      if (s) s.textContent = sub || "Querying BigQuery \u2014 this takes a few seconds";
-      el.classList.remove("hidden");
-      // Same safety net as the boot loader: never trap the user behind it.
+      // `sub` is accepted for call-site compatibility but is not rendered - the
+      // chip is only wide enough for one short line.
+      setFilterBusy(true, title || "Updating\u2026");
       if (filterLoaderWatchdog) clearTimeout(filterLoaderWatchdog);
       filterLoaderWatchdog = setTimeout(() => {
-        console.warn("Filter loader watchdog fired - releasing the overlay.");
+        console.warn("Filter loader watchdog fired - clearing the busy state.");
         hideFilterLoader();
       }, 60000);
     }
 
     function hideFilterLoader() {
       if (filterLoaderWatchdog) { clearTimeout(filterLoaderWatchdog); filterLoaderWatchdog = null; }
-      const el = document.getElementById("filter-loading");
-      if (el) el.classList.add("hidden");
+      setFilterBusy(false);
     }
 
     window.showFilterLoader = showFilterLoader;
@@ -2779,9 +2815,9 @@
       pendingOrgSelection = null;
       try { localStorage.setItem(ORG_SCOPE_KEY, currentOrgLdap); } catch (e) {}
       updateOrgScopeLabel();
-      // Changing scope re-runs the BigQuery query (~13-17s). Use the light
-      // filter overlay, NOT the full boot loader: the boot loader is reserved
-      // for the very first paint.
+      // Changing scope re-runs the BigQuery query (~13-17s). The dashboard
+      // stays on screen and readable throughout; progress shows on this filter
+      // control. The boot loader is reserved for the very first paint.
       loadData();
     }
     window.applyOrgScope = applyOrgScope;
@@ -2957,10 +2993,10 @@
       const origHtml = syncBtn ? syncBtn.innerHTML : "";
 
       // The full-screen boot loader is for the FIRST PAINT ONLY. Re-running the
-      // query for a scope change or a date filter keeps the dashboard on screen
-      // behind the light overlay instead of tearing it down. (forceBootNext is
-      // still honoured so an explicit caller can demand the full loader, but
-      // the org picker no longer sets it.)
+      // query for a scope change or a date filter leaves the dashboard fully
+      // visible and interactive, showing progress on the filter control itself.
+      // (forceBootNext is still honoured so an explicit caller can demand the
+      // full loader, but the org picker no longer sets it.)
       const useBootLoader = (!hasLoadedOnce || forceBootNext);
       forceBootNext = false;
       if (useBootLoader) {
