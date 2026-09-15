@@ -515,10 +515,18 @@ def query_emea_delivery_data(
             params.append(
                 bigquery.ScalarQueryParameter(name, "STRING", f"|{token}|")
             )
-        # Union of the selected orgs. A person under two selected leaders still
-        # appears once: this filters rows, and target_resources GROUPs BY
-        # resource_id afterwards.
-        roster_scope = "(" + " OR ".join(preds) + ")"
+        # Union of the selected orgs, then CC1 as a STRICT additional filter.
+        #
+        # The OR list and the cost-centre test are deliberately at different
+        # levels: ANY of the selected leaders, AND CC1. Written flat as
+        # "a OR b AND cc1" SQL precedence would bind it as "a OR (b AND cc1)",
+        # silently letting non-CC1 people in under the first leader - hence the
+        # explicit parentheses around both the union and the whole expression.
+        #
+        # This applies ONLY to a specific-leader selection. "All EMEA" keeps its
+        # original, broader predicate below, which admits CC1 *or* any EMEA
+        # cost centre / region.
+        roster_scope = "((" + " OR ".join(preds) + ") AND cost_center = 'CC1')"
     else:
         roster_scope = (
             "( cost_center_name LIKE '%EMEA%' OR cost_center = 'CC1'"
@@ -569,6 +577,17 @@ def query_org_options(
     Names are resolved from the people directory where the manager also appears
     as a resource; senior leaders often do not, in which case we fall back to
     MANAGER_CATALOG and finally to the raw ldap.
+
+    CC1 SCOPE. Only CC1 (Delivery Center) people are counted, because selecting
+    a leader now applies CC1 as a strict filter. Two consequences, both
+    intended:
+      * a manager appears here only if they have CC1 people under them - a
+        leader with an entirely non-CC1 org is no longer offered, because
+        picking them would return an empty dashboard
+      * the headcount still equals the resulting roster size exactly
+    Note this selects managers OF CC1 people, not managers who are themselves
+    CC1 - what matters for a scope filter is who you get when you pick it.
+    "All EMEA" is unaffected and keeps its broader predicate.
     """
     query = """
     WITH latest AS (
@@ -580,6 +599,7 @@ def query_org_options(
         AND timecard_week_ending BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
                                      AND DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY)
         AND manager_hierarchy_user_names IS NOT NULL
+        AND cost_center = 'CC1'
         AND STRPOS(manager_hierarchy_user_names, @root_token) > 0
     ),
     chains AS (

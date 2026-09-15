@@ -561,6 +561,13 @@
               <div class="px-3 pt-2.5 pb-1.5 border-b border-[#2a2356]">
                 <div class="text-[11px] font-bold text-[#e2e8f0]">Organisation scope</div>
                 <div class="text-[10px] text-[#8b84b8] mt-0.5">Everyone reporting up to the people you tick.</div>
+                <!-- Stated explicitly: picking a leader is NOT just a hierarchy
+                     filter, it also restricts to CC1. Without this note the
+                     smaller headcount looks like missing data. -->
+                <div class="text-[10px] text-[#c4b5fd] mt-1 flex items-start gap-1">
+                  <span class="shrink-0">&#9432;</span>
+                  <span>Picking a leader also restricts to cost centre <strong>CC1</strong>. <strong>All EMEA</strong> does not.</span>
+                </div>
               </div>
               <div id="org-scope-options" class="max-h-72 overflow-y-auto py-1"></div>
               <div class="flex items-center justify-between gap-2 px-2.5 py-2 border-t border-[#2a2356] bg-[#120e29]">
@@ -3119,6 +3126,22 @@
           updateOrgScopeLabel();
         }
         renderPipelineScopeNotice();
+
+        // A scoped selection that matches NOBODY renders as a wall of zeros,
+        // which reads as "the data is broken" rather than "this filter is
+        // empty". Now that picking a leader also requires CC1, this is reachable
+        // - e.g. a leader whose whole org sits in another cost centre, or a
+        // scope restored from localStorage that is no longer offered.
+        try {
+          const scopedNow = globalData.org_ldap && globalData.org_ldap !== "ALL";
+          if (scopedNow && (globalData.resources || []).length === 0) {
+            showToast(
+              "No CC1 people under " + (globalData.org_name || globalData.org_ldap) +
+              ". Picking a leader also filters to cost centre CC1 - switch to All EMEA to see everyone.",
+              "error"
+            );
+          }
+        } catch (e) { /* never let the warning break the render */ }
         // Payload is in; everything from here is local post-processing.
         if (useBootLoader) setBootStage(2);
 
