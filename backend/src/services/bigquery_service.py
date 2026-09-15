@@ -94,6 +94,29 @@ def require_bq_client(
     user_credentials = Credentials(token=token, scopes=[BIGQUERY_SCOPE])
     return bigquery.Client(project=PROJECT_ID, credentials=user_credentials)
 
+# LDAPs explicitly excluded from the roster at the request of the org owner.
+# All six are real, CC1, and inside the default org, so no scope predicate would
+# drop them - the exclusion has to be deliberate. Applied to the roster query AND
+# to the manager dropdown, because two of them (icebrian, ptokarski) are managers
+# and would otherwise still be offered as an org to scope by.
+EXCLUDED_LDAPS = (
+    "josecoliveira",
+    "mehmetalatas",
+    "mworonowicz",
+    "joaoaz",
+    "ptokarski",
+    "icebrian",
+)
+
+# Matches how ldap is normalised everywhere else here: the source column is
+# sometimes a bare ldap and sometimes an email address.
+EXCLUDED_LDAP_SQL = (
+    "LOWER(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) NOT IN ("
+    + ", ".join("'%s'" % l for l in EXCLUDED_LDAPS)
+    + ")"
+)
+
+
 def query_emea_delivery_data(
     client: bigquery.Client,
     start_date: Optional[str] = None,
@@ -178,6 +201,7 @@ def query_emea_delivery_data(
                    AND timecard_week_ending = (SELECT wk FROM anchor)) AS is_ooo
       FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`
       WHERE __ROSTER_SCOPE__
+        AND __LDAP_EXCLUSIONS__
         AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.scheduled_vs_actual_utilization`)
         AND timecard_week_ending BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
       GROUP BY resource_id
@@ -317,7 +341,9 @@ def query_emea_delivery_data(
         p.project_manager,
         p.project_manager_ldap,
         p.project_start_date,
-        p.project_end_date
+        p.project_end_date,
+        -- RAG health flag ('' / Green / Yellow / Red). NOT a lifecycle status.
+        p.project_status
       FROM week_assignments a
       LEFT JOIN target_projects p ON a.project_id = p.project_id
       WHERE p.project_end_date IS NULL OR p.project_end_date >= CURRENT_DATE()
@@ -480,6 +506,10 @@ def query_emea_delivery_data(
       COALESCE(de.de_name, den.full_name, de.de_ldap) AS delivery_executive,
       CAST(a.project_start_date AS STRING) AS project_start_date,
       CAST(a.project_end_date AS STRING) AS project_end_date,
+      -- Project health RAG. Blank at source on the overwhelming majority of
+      -- projects (17,226 blank vs 635 Green / 120 Yellow / 41 Red), so NULL
+      -- here means "not reported", NOT "healthy". The UI must say so.
+      NULLIF(TRIM(a.project_status), '') AS project_status,
       -- NULL when there is no assignment. Previously this fell back to the
       -- person's total hours, inventing a phantom "Delivery Project".
       a.scheduled_timecard_hours AS proj_scheduled_hours
@@ -536,6 +566,7 @@ def query_emea_delivery_data(
             " AND (region NOT LIKE '%AMER%' AND region NOT LIKE '%NorthAM%')"
         )
     query = query.replace("__ROSTER_SCOPE__", roster_scope)
+    query = query.replace("__LDAP_EXCLUSIONS__", EXCLUDED_LDAP_SQL)
 
     job_config = bigquery.QueryJobConfig(query_parameters=params)
     results = client.query(query, job_config=job_config).result(timeout=45)
@@ -601,6 +632,7 @@ def query_org_options(
         AND manager_hierarchy_user_names IS NOT NULL
         AND cost_center = 'CC1'
         AND STRPOS(manager_hierarchy_user_names, @root_token) > 0
+        AND __LDAP_EXCLUSIONS__
     ),
     chains AS (
       SELECT
@@ -721,6 +753,7 @@ def query_emea_pipeline_data(
     GROUP BY opportunity_id
     ORDER BY close_date DESC
     """
+    query = query.replace("__LDAP_EXCLUSIONS__", EXCLUDED_LDAP_SQL)
     try:
         job_config = bigquery.QueryJobConfig(
             query_parameters=[

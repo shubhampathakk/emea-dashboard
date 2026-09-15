@@ -3715,6 +3715,10 @@
       let fullStaffed = 0;
       let partialStaffed = 0;
       let benchCount = 0;
+      // People booked BEYOND their real weekly capacity. A subset of
+      // fullStaffed, not a fourth bucket - never add it to the
+      // bench/partial/full total.
+      let overCount = 0;
       let oooCount = 0;
 
       const hubs = {
@@ -3756,6 +3760,15 @@
         if (isBench) benchCount++;
         else if (isPartial) partialStaffed++;
         else fullStaffed++;
+        // Over-allocation is only visible in the SUM OF ASSIGNMENTS.
+        // r.weekly_hours is the person's contracted week and is already capped
+        // at capacity in the source - every person in the default scope reads
+        // exactly 40 (or 32), so an effPct-based test finds literally nobody
+        // even when 18 people are double-booked. The Staffing Roster's
+        // ">100% staffed" filter uses the assignment sum, and this tile links
+        // the user straight to it, so the two definitions must be identical.
+        const rawAllocPct = stdCap > 0 ? Math.round((rDeliveryHours / stdCap) * 100) : 0;
+        if (rDeliveryHours > 0 && rawAllocPct > 100) overCount++;
 
         if (r.is_ooo) oooCount++;
 
@@ -3797,13 +3810,22 @@
       }
       animateCounter("kpi-staffed-count", fullStaffed);
       if (document.getElementById("kpi-staffed-pct")) {
-        // This is simply the headline count expressed as a share of the whole
-        // roster - NOT a measure of how "dedicated" anyone is. The old wording
-        // ("80% Dedicated") read as an allocation depth figure, which it isn't.
-        const staffedShare = Math.round((fullStaffed / (resources.length || 1)) * 100);
+        // Shows the OVER-allocated share, which is the actionable number: the
+        // headline count already says how many are fully staffed, so repeating
+        // it as a percentage added nothing. Denominator is the whole roster.
+        const overShare = Math.round((overCount / (resources.length || 1)) * 100);
         const el = document.getElementById("kpi-staffed-pct");
-        el.textContent = `${staffedShare}% of team`;
-        el.title = `${fullStaffed} of ${resources.length} people are at 85%+ of their weekly capacity`;
+        el.textContent = `${overShare}% over 100%`;
+        el.title = overCount
+          ? `${overCount} of ${resources.length} people are booked across their projects for more `
+            + `than their weekly capacity. ${fullStaffed} are at 85%+ of capacity. `
+            + `Staffing Roster \u2192 filter ">100% staffed" to see exactly these people.`
+          : `Nobody is booked beyond their weekly capacity. ${fullStaffed} of ${resources.length} are at 85%+ of it.`;
+        // Amber when anyone is over-allocated; the tile's default green would
+        // read as "all good" for what is actually an overbooking warning.
+        el.className = overCount
+          ? "bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold px-2 py-0.5 rounded-lg hover:bg-amber-100 transition shadow-2xs"
+          : "bg-[#00cea8]/10 text-[#008f73] border border-[#00cea8]/25 text-[11px] font-bold px-2 py-0.5 rounded-lg hover:bg-[#00cea8]/20 transition shadow-2xs";
       }
       animateCounter("kpi-bench-count", benchCount);
       if (document.getElementById("kpi-bench-label")) {
@@ -4964,6 +4986,20 @@
             const pmCell = p.project_manager
               ? `<span class="text-purple-700 font-semibold">📋 ${p.project_manager}</span>`
               : `<span class="text-slate-400 italic" title="project_manager is blank or a 'Please Update Project Manager' placeholder at source">PM Unassigned</span>`;
+            // Project health RAG from projects.project_status. The source word
+            // is "Yellow"; it is shown as "Amber" to match how the business
+            // says it, with the raw value kept in the tooltip. A blank value is
+            // NOT reported health and must not be coloured green.
+            const ragRaw = (p.project_status || "").trim();
+            const ragDef = {
+              green:  ["bg-emerald-50 text-emerald-700 border-emerald-200", "bg-emerald-500", "Green"],
+              yellow: ["bg-amber-50 text-amber-700 border-amber-200",       "bg-amber-500",   "Amber"],
+              amber:  ["bg-amber-50 text-amber-700 border-amber-200",       "bg-amber-500",   "Amber"],
+              red:    ["bg-rose-50 text-rose-700 border-rose-200",          "bg-rose-500",    "Red"]
+            }[ragRaw.toLowerCase()];
+            const ragCell = ragDef
+              ? `<span class="inline-flex items-center gap-1 ${ragDef[0]} border font-bold px-2 py-0.5 rounded-lg" title="Project health (projects.project_status): ${ragRaw}"><span class="w-1.5 h-1.5 rounded-full ${ragDef[1]}"></span>${ragDef[2]}</span>`
+              : `<span class="inline-flex items-center gap-1 bg-slate-100 text-slate-500 border border-slate-200 font-semibold px-2 py-0.5 rounded-lg" title="No RAG health reported at source for this project"><span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>No status</span>`;
             const endCell = p.end
               ? `<span class="text-slate-500">ends ${formatRosterDate(p.end)}</span>`
               : `<span class="text-slate-300">no end date</span>`;
@@ -4980,6 +5016,7 @@
                 <div class="flex flex-wrap justify-between items-start gap-2">
                   <div class="font-semibold text-xs text-slate-900 flex-1 min-w-[220px]">${p.project_name}</div>
                   <div class="flex items-center gap-2 text-[11px]">
+                    ${ragCell}
                     ${pmCell}
                     <span class="bg-white border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-lg">${fmtHrs(p.total_hours)} hrs/wk</span>
                   </div>

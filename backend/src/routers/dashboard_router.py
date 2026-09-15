@@ -318,6 +318,10 @@ def build_dashboard_payload(
         proj_name = row.get("project_name") or ""
         # Clean name for grouping: project_name has the assignment id appended.
         base_proj_name = row.get("base_project_name") or proj_name
+        # Project health RAG, straight from projects.project_status. Blank on
+        # the vast majority of projects at source, so "" means NOT REPORTED -
+        # it must never be rendered as Green.
+        proj_status = (row.get("project_status") or "").strip()
         acc_name = (row.get("account_name") or "").strip()
 
         # Real people from the source. Empty string means genuinely unassigned;
@@ -462,6 +466,8 @@ def build_dashboard_payload(
                     "engineering_manager": engm_name,
                     "start": start_date,
                     "end": end_date,
+                    # "" = no RAG reported at source, which is the common case.
+                    "project_status": proj_status,
                     "total_hours": 0.0,
                     "people": []
                 }
@@ -469,6 +475,8 @@ def build_dashboard_payload(
             elif pm_person and not proj["project_manager"]:
                 proj["project_manager"] = pm_person
                 proj["project_manager_ldap"] = pm_person_ldap
+            if proj_status and not proj.get("project_status"):
+                proj["project_status"] = proj_status
 
             proj["total_hours"] = round(proj["total_hours"] + hrs, 1)
             pp = next((x for x in proj["people"] if x["ldap"] == ldap), None)
