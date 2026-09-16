@@ -2410,14 +2410,19 @@
           if (Array.isArray(acct[hub])) acct[hub] = acct[hub].filter(p => !isManagerPerson(p));
         });
 
-        acct.projects = (acct.projects || []).filter(proj => {
+        acct.projects = (acct.projects || []).map(proj => {
+          const before = (proj.people || []).length;
           proj.people = (proj.people || []).filter(p => !isManagerPerson(p));
           proj.total_hours = Math.round(
             proj.people.reduce((s, p) => s + (Number(p.hours) || 0), 0) * 10) / 10;
-          // A project staffed only by managers has nothing left to show. Its
-          // TVC badge goes with it - a TVC count against a row with no visible
-          // Google staff would be more confusing than omitting the row.
-          return proj.people.length > 0;
+          // A project whose only staff are managers is KEPT and flagged, not
+          // dropped. Dropping it deleted whole accounts from the portfolio -
+          // CAIXABANK SA has exactly one person on it - and took a real TVC
+          // assignment down with them. The row shows zero hours, which is the
+          // honest figure once managers are excluded from the numbers.
+          proj.manager_only = before > 0 && proj.people.length === 0;
+          proj.hidden_manager_count = before - proj.people.length;
+          return proj;
         });
 
         acct.total_hours = Math.round(
@@ -5006,8 +5011,16 @@
 
     function renderPortfolioCards() {
       const q = (document.getElementById("portfolio-search")?.value || "").toLowerCase().trim();
+      // An account earns a card if it has visible hours or visible people - OR
+      // if everything it has left is a manager-only project. That last case is
+      // not junk: it is a real account (CAIXABANK SA) whose sole staffed person
+      // is a manager, and silently dropping it lost a live TVC assignment too.
       let customers = (globalData.customerPortfolio || [])
-        .filter(c => c && c.account_name && c.account_name !== "Strategic Partner" && (c.total_hours > 0 || (c.EMEA && c.EMEA.length > 0) || (c.GSD && c.GSD.length > 0)))
+        .filter(c => c && c.account_name && c.account_name !== "Strategic Partner"
+          && (c.total_hours > 0
+              || (c.EMEA && c.EMEA.length > 0)
+              || (c.GSD && c.GSD.length > 0)
+              || (c.projects || []).some(p => p && p.manager_only)))
         .slice();
       const container = document.getElementById("portfolio-cards-container");
       if (!container) return;
@@ -5271,6 +5284,14 @@
             const endCell = p.end
               ? `<span class="text-slate-500">ends ${formatRosterDate(p.end)}</span>`
               : `<span class="text-slate-300">no end date</span>`;
+            // A row can be empty for two very different reasons: nobody is
+            // booked on it this week, or its only people are managers and the
+            // "Show managers" box is unticked. Saying "no one staffed" in the
+            // second case would be a lie, so the two are worded separately.
+            const mgrHidden = Number(p.hidden_manager_count) || 0;
+            const mgrOnlyCell = p.manager_only
+              ? `<span class="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 font-bold px-2 py-0.5 rounded-lg" title="The only ${mgrHidden === 1 ? "person" : "people"} booked on this project ${mgrHidden === 1 ? "is a manager" : "are managers"}. Tick &quot;Show managers on the tabs&quot; in the org selector to see them and their hours."><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Manager only</span>`
+              : "";
             const memberPills = (p.people || [])
               .slice()
               .sort((x, y) => (y.hours || 0) - (x.hours || 0))
@@ -5279,19 +5300,23 @@
                 const col = mp > 100 ? 'text-purple-700' : 'text-indigo-600';
                 return `<span class="bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold px-2 py-0.5 rounded-lg" title="${m.name} - ${fmtHrs(m.hours)}h of a ${fmtHrs(m.capacity_hours)}h week on this project">${m.name} <span class="${col} font-bold">(${mp}%)</span> <span class="text-slate-400 font-normal">${fmtHrs(m.hours)}h</span></span>`;
               }).join(" ");
+            const emptyPeopleNote = p.manager_only
+              ? `<span class="text-[11px] text-amber-700 italic">${mgrHidden} manager${mgrHidden === 1 ? "" : "s"} hidden &bull; no other Google staff on this project</span>`
+              : '<span class="text-[11px] text-slate-400 italic">No one staffed this week</span>';
             projectRows += `
               <div class="border border-slate-200/80 rounded-xl p-3 bg-slate-50/60">
                 <div class="flex flex-wrap justify-between items-start gap-2">
                   <div class="font-semibold text-xs text-slate-900 flex-1 min-w-[220px]">${p.project_name}</div>
                   <div class="flex items-center gap-2 text-[11px]">
                     ${ragCell}
+                    ${mgrOnlyCell}
                     ${tvcCell}
                     ${pmCell}
                     <span class="bg-white border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-lg">${fmtHrs(p.total_hours)} hrs/wk</span>
                   </div>
                 </div>
                 <div class="text-[10px] mt-1">${endCell}</div>
-                <div class="flex flex-wrap gap-1.5 mt-2">${memberPills || '<span class="text-[11px] text-slate-400 italic">No one staffed this week</span>'}</div>
+                <div class="flex flex-wrap gap-1.5 mt-2">${memberPills || emptyPeopleNote}</div>
                 ${tvcPanel}
               </div>`;
           });
@@ -5312,10 +5337,21 @@
         // the business calls it; "EMEA" was misleading since GSD serves EMEA too.
         const pEmea = (c.EMEA || []).length;
         const pGsd = (c.GSD || []).length;
-        const pHubLabel = (pEmea && pGsd)
-          ? `${pEmea} PSO &bull; ${pGsd} GSD`
-          : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} PSO Delivery`);
-        let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${pHubLabel}</span>`;
+        // Both can be zero once managers are hidden - the account is only here
+        // because its projects are manager-staffed. "0 PSO Delivery" would read
+        // like a data error, so say what is actually going on.
+        const pHubLabel = (!pEmea && !pGsd)
+          ? `Managers only`
+          : ((pEmea && pGsd)
+              ? `${pEmea} PSO &bull; ${pGsd} GSD`
+              : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} PSO Delivery`));
+        const pHubClass = (!pEmea && !pGsd)
+          ? "bg-amber-50 text-amber-700 border-amber-200/80"
+          : "bg-blue-50 text-blue-700 border-blue-200/80";
+        const pHubTitle = (!pEmea && !pGsd)
+          ? "Every person booked on this account is a manager, and managers are hidden. Tick &quot;Show managers on the tabs&quot; to see them."
+          : "Visible Google delivery staff on this account, by hub";
+        let regCountsHtml = `<span class="${pHubClass} border text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs" title="${pHubTitle}">${pHubLabel}</span>`;
         // Account roll-up of assigned contractors. Only shown when there are
         // some - an account with none should not carry an empty badge.
         const acctTvcCount = Number(c.tvc_count) || 0;
