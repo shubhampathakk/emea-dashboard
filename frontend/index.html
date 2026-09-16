@@ -570,6 +570,25 @@
                 </div>
               </div>
               <div id="org-scope-options" class="max-h-72 overflow-y-auto py-1"></div>
+              <!-- Display-only filter, deliberately separated from the leader
+                   list above. Ticking a leader changes WHICH people the backend
+                   returns and needs Apply; this one only hides rows already on
+                   screen and takes effect immediately, so the two must not look
+                   like the same kind of control. Managers stay selectable in the
+                   list above either way. -->
+              <div class="px-3 py-2 border-t border-[#2a2356] bg-[#181234]">
+                <label class="flex items-start gap-2.5 cursor-pointer group"
+                       title="Hides people whose role is Manager (Billable CON/SCE) from every tab's tables, charts and KPIs.">
+                  <input type="checkbox" id="toggle-exclude-managers"
+                         onchange="onToggleExcludeManagers(this.checked)"
+                         class="mt-0.5 w-3.5 h-3.5 rounded accent-[#915EFF] cursor-pointer shrink-0">
+                  <span class="min-w-0">
+                    <span class="block text-[11.5px] font-semibold text-[#e2e8f0] group-hover:text-white">Hide managers from the tabs</span>
+                    <span class="block text-[10px] text-[#8b84b8] mt-0.5">Leaves them selectable above, but drops them from every tab's figures. Applies instantly.</span>
+                    <span id="exclude-managers-hint" class="block text-[10px] text-[#c4b5fd] mt-0.5"></span>
+                  </span>
+                </label>
+              </div>
               <div class="flex items-center justify-between gap-2 px-2.5 py-2 border-t border-[#2a2356] bg-[#120e29]">
                 <button type="button" onclick="resetOrgScopeSelection()"
                         class="text-[11px] font-semibold text-[#8b84b8] hover:text-[#c4b5fd] px-2 py-1 rounded-lg transition cursor-pointer">
@@ -2302,6 +2321,168 @@
   <!-- Main JavaScript App Logic -->
   <script>
     let globalData = { resources: [], customerPortfolio: [], sheets: [] };
+
+    // ---------------------------------------------------------------------
+    // MANAGER VISIBILITY (display-only)
+    // ---------------------------------------------------------------------
+    // People managers carry a billable target but are not staffed like ICs, so
+    // their utilisation and allocation distort every roll-up. This hides them
+    // from the tabs WITHOUT changing what the backend returns - they stay in
+    // the org-scope list, and picking one still works.
+    //
+    // Default OFF: unticked means the dashboard behaves exactly as before, so
+    // nobody's numbers move without them asking.
+    //
+    // "Manager" is `role` STARTING WITH "manager", which in this data means
+    // "Manager (Billable CON/SCE)" - 6 of the 65 people in the default org, and
+    // a superset of the 5 who actually have direct reports inside the roster
+    // (swatiagg has the role but her reports sit outside this CC1 scope).
+    // startsWith, never includes: "Technical Account Manager" and "Cloud
+    // Program Manager" are ICs and must not be caught.
+    //
+    // Role-based rather than "has direct reports" on purpose - the latter
+    // shrinks as you scope into a sub-org, so the same person would be a
+    // manager on one scope and an IC on another.
+    let excludeManagers = false;
+    try {
+      excludeManagers = localStorage.getItem("excludeManagers") === "1";
+    } catch (e) { /* private browsing - fall back to the default */ }
+
+    // Pristine copies of the payload, as JSON, taken once per load. Filtering
+    // is always re-derived from these rather than applied in place, so
+    // toggling off restores the original figures exactly and toggling
+    // repeatedly cannot compound.
+    let rawResourcesJSON = "[]";
+    let rawPortfolioJSON = "[]";
+
+    function isManagerRole(role) {
+      return String(role || "").trim().toLowerCase().startsWith("manager");
+    }
+
+    function isManagerPerson(p) {
+      return !!p && isManagerRole(p.role);
+    }
+
+    function snapshotForManagerFilter() {
+      try {
+        rawResourcesJSON = JSON.stringify((globalData && globalData.resources) || []);
+        rawPortfolioJSON = JSON.stringify((globalData && globalData.customerPortfolio) || []);
+      } catch (e) {
+        rawResourcesJSON = "[]";
+        rawPortfolioJSON = "[]";
+      }
+    }
+
+    // Rebuilds globalData.resources / .customerPortfolio from the snapshot.
+    // Returns how many people were hidden, for the hint line.
+    function applyManagerVisibility() {
+      let resources, portfolio;
+      try {
+        resources = JSON.parse(rawResourcesJSON);
+        portfolio = JSON.parse(rawPortfolioJSON);
+      } catch (e) {
+        return 0;
+      }
+
+      if (!excludeManagers) {
+        globalData.resources = resources;
+        globalData.customerPortfolio = portfolio;
+        return 0;
+      }
+
+      const hidden = resources.filter(isManagerPerson).length;
+      globalData.resources = resources.filter(r => !isManagerPerson(r));
+
+      // The portfolio carries its own copies of people plus pre-summed hours,
+      // so removing a person means re-summing the totals above them. Left
+      // alone, an account would keep a manager's hours in total_hours while
+      // showing none of the rows that produce it.
+      globalData.customerPortfolio = portfolio.filter(acct => {
+        if (!acct) return false;
+
+        ["EMEA", "GSD"].forEach(hub => {
+          if (Array.isArray(acct[hub])) acct[hub] = acct[hub].filter(p => !isManagerPerson(p));
+        });
+
+        acct.projects = (acct.projects || []).filter(proj => {
+          proj.people = (proj.people || []).filter(p => !isManagerPerson(p));
+          proj.total_hours = Math.round(
+            proj.people.reduce((s, p) => s + (Number(p.hours) || 0), 0) * 10) / 10;
+          // A project staffed only by managers has nothing left to show. Its
+          // TVC badge goes with it - a TVC count against a row with no visible
+          // Google staff would be more confusing than omitting the row.
+          return proj.people.length > 0;
+        });
+
+        acct.total_hours = Math.round(
+          acct.projects.reduce((s, p) => s + (Number(p.total_hours) || 0), 0) * 10) / 10;
+
+        // Account-level TVC count must be re-derived from the projects that
+        // survived, otherwise the pill keeps counting contractors on rows the
+        // user can no longer see.
+        if (typeof acct.tvc_count === "number") {
+          const seen = new Set();
+          acct.projects.forEach(p => (p.tvcs || []).forEach(t => {
+            const u = String(t.username || "").trim().toLowerCase();
+            if (u) seen.add(u);
+          }));
+          acct.tvc_count = seen.size;
+        }
+
+        return acct.projects.length > 0
+          || (acct.EMEA || []).length > 0
+          || (acct.GSD || []).length > 0;
+      });
+
+      return hidden;
+    }
+
+    function updateExcludeManagersUI(hiddenCount) {
+      const cb = document.getElementById("toggle-exclude-managers");
+      if (cb) cb.checked = excludeManagers;
+      const hint = document.getElementById("exclude-managers-hint");
+      if (hint) {
+        hint.textContent = excludeManagers
+          ? `${hiddenCount} manager${hiddenCount === 1 ? "" : "s"} hidden from all tabs.`
+          : "";
+      }
+    }
+
+    // Re-renders every tab from the already-loaded payload. No refetch: this is
+    // purely a view filter, and a network round-trip would make a checkbox feel
+    // like a scope change.
+    function onToggleExcludeManagers(checked) {
+      excludeManagers = !!checked;
+      try {
+        localStorage.setItem("excludeManagers", excludeManagers ? "1" : "0");
+      } catch (e) { /* non-fatal */ }
+
+      const hidden = applyManagerVisibility();
+      updateExcludeManagersUI(hidden);
+
+      try {
+        updateDashboardKPIs();
+        renderBoard();
+        renderRosterTable();
+        renderPortfolioCards();
+        renderTimelineCards();
+        renderSkillMatrix();
+        renderGtmView();
+      } catch (e) {
+        console.error("Failed to re-render after manager toggle", e);
+      }
+
+      if (typeof showToast === "function") {
+        showToast(
+          excludeManagers
+            ? `Managers hidden from all tabs (${hidden} ${hidden === 1 ? "person" : "people"}).`
+            : "Managers shown again on all tabs.",
+          "success"
+        );
+      }
+    }
+    window.onToggleExcludeManagers = onToggleExcludeManagers;
+
     const VALID_TABS = ["exec", "board", "roster", "portfolio", "timeline", "matrix", "gtm"];
     const initialHash = (window.location.hash || "").replace("#", "").toLowerCase();
     let currentTab = VALID_TABS.includes(initialHash) ? initialHash : "exec";
@@ -3344,6 +3525,14 @@
         }
 
         if (useBootLoader) setBootStage(3);
+
+        // Must run AFTER the ldap sanitising above (the snapshot has to hold
+        // the cleaned rows) and BEFORE any render, so a reload or an org-scope
+        // change re-applies the checkbox without briefly painting the
+        // unfiltered figures.
+        snapshotForManagerFilter();
+        updateExcludeManagersUI(applyManagerVisibility());
+
         populateManagerFilter();
         updateDashboardKPIs();
         renderBoard();
