@@ -9,6 +9,11 @@ from google.cloud import bigquery
 
 logger = logging.getLogger(__name__)
 
+from src.services.tvc_service import (
+    SHEET_ID as TVC_SHEET_ID,
+    get_tvc_index,
+    lookup_project as lookup_tvc_project,
+)
 from src.services.bigquery_service import (
     get_bq_client, 
     require_bq_client,
@@ -246,6 +251,78 @@ def _build_resource_demand(demand_rows: Optional[List[Dict[str, Any]]]) -> Dict[
         "hubs": sorted(hubs),
         "accounts": sorted(accounts),
         "source": "weekly_resource_requests x projects (opportunity key)",
+    }
+
+
+# Fields worth sending to the browser for each TVC. The sheet carries more
+# (skills, mask id, billing dates) but the portfolio row only needs identity
+# and who supplies them.
+_TVC_DISPLAY_FIELDS = ("username", "partner", "level", "role", "sub_practice", "google_poc")
+
+
+def _attach_tvc_assignments(customers_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Hang the live TVC roster off each portfolio project, in place.
+
+    Matching is by project NAME because the sheet is maintained by hand and has
+    no project id. `project_name` here is `base_project_name`, i.e. the raw
+    `projects.project_name` with the appended assignment id removed, which is
+    exactly the string the sheet's maintainer copies in.
+
+    A project that does not appear in the sheet genuinely has no TVC assigned -
+    the sheet is the full active Core-EMEA TVC roster, not a sample. That is why
+    tvc_count is set to 0 rather than left absent. But when the fetch FAILS we
+    must not let 0 masquerade as "no contractors", so the returned summary
+    carries `available` and the UI suppresses the badge entirely.
+    """
+    index = get_tvc_index()
+    available = bool(index.get("ok")) or bool(index.get("is_stale"))
+
+    matched_projects = 0
+    matched_rows = 0
+    org_people: set = set()
+    for acct in customers_list:
+        acct_people: set = set()
+        for proj in acct.get("projects", []) or []:
+            people = lookup_tvc_project(index, proj.get("project_name")) if available else []
+            proj["tvcs"] = [
+                {k: p.get(k, "") for k in _TVC_DISPLAY_FIELDS} for p in people
+            ]
+            proj["tvc_count"] = len(people)
+            if people:
+                matched_projects += 1
+                matched_rows += len(people)
+            # One contractor can be staffed on two projects inside the same
+            # account - mutharasum is on both Deutsche Bank projects. Summing the
+            # per-project counts would advertise 6 people where there are 5, so
+            # the account badge counts DISTINCT contractors. The per-project
+            # count stays as-is: there, one row really is one assignment.
+            for person in people:
+                uname = (person.get("username") or "").strip().lower()
+                if uname:
+                    acct_people.add(uname)
+                    org_people.add(uname)
+        acct["tvc_count"] = len(acct_people)
+
+    return {
+        "available": available,
+        "is_stale": bool(index.get("is_stale")),
+        "error": index.get("error"),
+        "tab": index.get("tab"),
+        "fetched_at": index.get("fetched_at"),
+        "token_strategy": index.get("token_strategy"),
+        # Roster-wide totals, straight from the sheet.
+        "total_tvcs": index.get("total_tvcs", 0),
+        "assigned_tvcs": index.get("assigned_tvcs", 0),
+        "unassigned_tvcs": index.get("unassigned_tvcs", 0),
+        # How much of that roster actually landed on a project in THIS org. The
+        # gap is expected: the sheet spans all of Core-EMEA, the portfolio is
+        # one manager's org.
+        "matched_projects": matched_projects,
+        # DISTINCT contractors, so this is comparable with assigned_tvcs.
+        "matched_tvcs": len(org_people),
+        # Project rows, which is larger when someone spans two projects.
+        "matched_assignments": matched_rows,
+        "sheet_url": "https://docs.google.com/spreadsheets/d/%s/edit" % TVC_SHEET_ID,
     }
 
 
@@ -913,6 +990,10 @@ def build_dashboard_payload(
 
     customers_list = list(customer_map.values())
 
+    # Live TVC roster from the Core EMEA Active TVCs sheet. Cached and
+    # non-fatal: a sheet outage degrades the badge, never the dashboard.
+    tvc_summary = _attach_tvc_assignments(customers_list)
+
     # Never invent revenue. If there is no booked value in the period, say so
     # rather than displaying a fraction of pipeline as though it were real.
     # (This previously rendered `total_pipeline_val * 0.25` as PS Engagement.)
@@ -947,6 +1028,7 @@ def build_dashboard_payload(
         "hubs": hubs,
         "resources": resources_list,
         "customerPortfolio": customers_list,
+        "tvc": tvc_summary,
         "gtm": {
             "summary": gtm_summary,
             "regional_capture": regional_capture_list,

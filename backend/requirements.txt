@@ -8,3 +8,5 @@ uvloop
 httptools
 pandas
 python-multipart
+requests
+google-auth

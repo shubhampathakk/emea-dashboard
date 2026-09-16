@@ -4810,7 +4810,28 @@
         .slice();
       const container = document.getElementById("portfolio-cards-container");
       if (!container) return;
-      container.innerHTML = "";
+
+      // Live TVC roster, read each load from the Core EMEA Active TVCs sheet.
+      // When the sheet cannot be read we HIDE the badges rather than render 0,
+      // because "0 TVCs" and "we could not check" mean very different things to
+      // someone deciding whether a project is covered.
+      const tvcMeta = (globalData && globalData.tvc) || null;
+      const tvcAvailable = !!(tvcMeta && tvcMeta.available);
+      const tvcTab = (tvcMeta && tvcMeta.tab) || "";
+      let tvcBanner = "";
+      if (tvcMeta && !tvcAvailable) {
+        tvcBanner = `<div style="grid-column:1/-1" class="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl px-3 py-2">
+            <strong class="font-bold">TVC data unavailable.</strong>
+            The Core EMEA Active TVCs sheet could not be read, so TVC counts are hidden rather than shown as zero.
+            ${tvcMeta.error ? `<span class="text-amber-600 block mt-0.5">${tvcEsc(tvcMeta.error)}</span>` : ""}
+          </div>`;
+      } else if (tvcMeta && tvcMeta.is_stale) {
+        tvcBanner = `<div style="grid-column:1/-1" class="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl px-3 py-2">
+            <strong class="font-bold">Showing the last good TVC roster.</strong>
+            The live refresh failed, so these counts may be out of date.
+          </div>`;
+      }
+      container.innerHTML = tvcBanner;
 
       if (portfolioSort === "alpha") {
         customers.sort((a, b) => a.account_name.localeCompare(b.account_name));
@@ -4856,6 +4877,11 @@
             .some(v => (v || "").toLowerCase().includes(q));
           const matchPgM = pmNames.some(n => n.toLowerCase().includes(q));
           const matchProj = projects.some(p => (p.project_name || "").toLowerCase().includes(q));
+          // Searching a contractor's ldap or their supplier should find the account.
+          const matchTvc = projects.some(p => (p.tvcs || []).some(t =>
+            (t.username || "").toLowerCase().includes(q) ||
+            (t.partner || "").toLowerCase().includes(q) ||
+            (t.role || "").toLowerCase().includes(q)));
           let matchPeople = false;
           ["GSD", "EMEA"].forEach(reg => {
             (c[reg] || []).forEach(p => {
@@ -4864,7 +4890,7 @@
               }
             });
           });
-          if (!matchAccount && !matchDE && !matchPgM && !matchProj && !matchPeople) return;
+          if (!matchAccount && !matchDE && !matchPgM && !matchProj && !matchPeople && !matchTvc) return;
         }
 
         const card = document.createElement("div");
@@ -5000,6 +5026,34 @@
             const ragCell = ragDef
               ? `<span class="inline-flex items-center gap-1 ${ragDef[0]} border font-bold px-2 py-0.5 rounded-lg" title="Project health (projects.project_status): ${ragRaw}"><span class="w-1.5 h-1.5 rounded-full ${ragDef[1]}"></span>${ragDef[2]}</span>`
               : `<span class="inline-flex items-center gap-1 bg-slate-100 text-slate-500 border border-slate-200 font-semibold px-2 py-0.5 rounded-lg" title="No RAG health reported at source for this project"><span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>No status</span>`;
+            // TVCs assigned to this project, matched by project name against the
+            // sheet. The sheet is the COMPLETE active Core-EMEA TVC roster, so a
+            // project that is absent from it genuinely has none - hence the
+            // explicit "No TVC" rather than simply omitting the badge.
+            const pTvcs = Array.isArray(p.tvcs) ? p.tvcs : [];
+            const tvcKey = `${accKey}_${String(p.project_id || p.project_name || "")
+              .replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60)}`;
+            let tvcCell = "", tvcPanel = "";
+            if (tvcAvailable) {
+              if (pTvcs.length) {
+                const plural = pTvcs.length === 1 ? "" : "s";
+                tvcCell = `<button type="button" onclick="toggleProjectTvcs('${tvcKey}')" class="inline-flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 font-bold px-2 py-0.5 rounded-lg transition" title="${pTvcs.length} TVC${plural} assigned to this project, per the Core EMEA Active TVCs sheet (tab ${tvcEsc(tvcTab)}). Click for detail."><span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>${pTvcs.length} TVC${plural}<span id="tvcchev-${tvcKey}" class="inline-block transition-transform">&#9662;</span></button>`;
+                const tvcRows = pTvcs.map(t => `
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] bg-white border border-teal-100 rounded-lg px-2 py-1">
+                      <span class="font-bold text-slate-800">${tvcEsc(t.username)}</span>
+                      ${t.partner ? `<span class="bg-teal-50 text-teal-700 border border-teal-200 font-semibold px-1.5 py-0.5 rounded">${tvcEsc(t.partner)}</span>` : ""}
+                      ${t.level ? `<span class="text-slate-500">${tvcEsc(t.level)}</span>` : ""}
+                      ${t.role ? `<span class="text-slate-700 font-medium">${tvcEsc(t.role)}</span>` : ""}
+                      ${t.sub_practice ? `<span class="text-slate-400">${tvcEsc(t.sub_practice)}</span>` : ""}
+                    </div>`).join("");
+                tvcPanel = `<div id="tvcs-${tvcKey}" class="hidden flex-col gap-1 mt-2 pt-2 border-t border-teal-100">
+                      <span class="text-[10px] text-teal-700 font-bold uppercase tracking-wide">Assigned TVCs</span>
+                      ${tvcRows}
+                    </div>`;
+              } else {
+                tvcCell = `<span class="text-slate-400 font-medium" title="This project is not listed in the Core EMEA Active TVCs sheet (tab ${tvcEsc(tvcTab)}), so no TVC is assigned to it.">No TVC</span>`;
+              }
+            }
             const endCell = p.end
               ? `<span class="text-slate-500">ends ${formatRosterDate(p.end)}</span>`
               : `<span class="text-slate-300">no end date</span>`;
@@ -5017,12 +5071,14 @@
                   <div class="font-semibold text-xs text-slate-900 flex-1 min-w-[220px]">${p.project_name}</div>
                   <div class="flex items-center gap-2 text-[11px]">
                     ${ragCell}
+                    ${tvcCell}
                     ${pmCell}
                     <span class="bg-white border border-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-lg">${fmtHrs(p.total_hours)} hrs/wk</span>
                   </div>
                 </div>
                 <div class="text-[10px] mt-1">${endCell}</div>
                 <div class="flex flex-wrap gap-1.5 mt-2">${memberPills || '<span class="text-[11px] text-slate-400 italic">No one staffed this week</span>'}</div>
+                ${tvcPanel}
               </div>`;
           });
 
@@ -5046,6 +5102,12 @@
           ? `${pEmea} PSO &bull; ${pGsd} GSD`
           : (pGsd ? `${pGsd} GSD Delivery` : `${pEmea} PSO Delivery`);
         let regCountsHtml = `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">${pHubLabel}</span>`;
+        // Account roll-up of assigned contractors. Only shown when there are
+        // some - an account with none should not carry an empty badge.
+        const acctTvcCount = Number(c.tvc_count) || 0;
+        if (tvcAvailable && acctTvcCount > 0) {
+          regCountsHtml += `<span class="bg-teal-50 text-teal-700 border border-teal-200/80 text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-2xs" title="${acctTvcCount} TVC${acctTvcCount === 1 ? "" : "s"} assigned across this account's projects, per the Core EMEA Active TVCs sheet (tab ${tvcEsc(tvcTab)})">&#129309; ${acctTvcCount} TVC${acctTvcCount === 1 ? "" : "s"}</span>`;
+        }
 
         // Fallback sums each member's real capacity from the source rather
         // than assuming a flat 40h a head.
@@ -5084,6 +5146,24 @@
     // Expand an account into its real projects. Grouped on project_id, so the
     // count here is the number of ACTUAL projects, not the inflated count you
     // get from project_name (which carries an appended assignment id).
+    // Local escaper: the portfolio block renders sheet-sourced strings
+    // (contractor ldaps, supplier names) straight into innerHTML.
+    function tvcEsc(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function toggleProjectTvcs(tvcKey) {
+      const panel = document.getElementById(`tvcs-${tvcKey}`);
+      const chev = document.getElementById(`tvcchev-${tvcKey}`);
+      if (!panel) return;
+      const isHidden = panel.classList.contains("hidden");
+      panel.classList.toggle("hidden", !isHidden);
+      panel.classList.toggle("flex", isHidden);
+      if (chev) chev.style.transform = isHidden ? "rotate(180deg)" : "";
+    }
+
     function togglePortfolioProjects(accKey) {
       const panel = document.getElementById(`projects-${accKey}`);
       const chev = document.getElementById(`chev-${accKey}`);
