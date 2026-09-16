@@ -1271,14 +1271,12 @@
               <input type="text" id="roster-search" onkeyup="renderRosterTable()" placeholder="Search name, account, skill..." class="w-full bg-slate-50 text-xs border border-slate-200/90 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner">
               <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
-            <!-- Language filter is hidden: the backend assigns every resource
-                 the same hardcoded ['English'], so "German"/"Spanish" always
-                 returned zero rows. Restore this once real language data is
-                 available in the source. The element is kept (not deleted) so
-                 renderRosterTable() continues to read a defined "ALL". -->
-            <select id="roster-filter-lang" onchange="renderRosterTable()" class="hidden">
-              <option value="ALL">All Languages</option>
-            </select>
+            <!-- There is deliberately no language filter. The source carries no
+                 language data, so the backend gave every resource the same
+                 hardcoded ['English'] and "German"/"Spanish" always returned
+                 zero rows. It lived on here for a while as a permanently
+                 hidden <select>; the filter logic has now been removed too.
+                 Reinstate both only if real language data appears upstream. -->
             <select id="roster-filter-reg" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
               <option value="ALL">All EMEA Delivery</option>
               <option value="EMEA">EMEA Delivery Pool</option>
@@ -1650,7 +1648,7 @@
               </svg>
             </div>
           </div>
-          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-customers">373</div>
+          <div class="text-2xl lg:text-3xl font-extrabold font-title text-slate-900 mt-2" id="kpi-gtm-customers">—</div>
           <div class="text-[11px] text-amber-700 font-medium mt-1.5 flex items-center gap-1">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
@@ -1863,7 +1861,7 @@
             </div>
             <div class="flex items-center gap-2 text-xs">
               <span class="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-xl border border-indigo-200" id="gtm-total-weighted-acv-badge">Weighted Pipeline: <strong>—</strong></span>
-              <span class="bg-purple-50 text-purple-700 font-bold px-3 py-1 rounded-xl border border-purple-200" id="gtm-total-demand-fte-badge">Forward Demand: <strong>—</strong></span>
+              <span class="bg-purple-50 text-purple-700 font-bold px-3 py-1 rounded-xl border border-purple-200" id="gtm-total-demand-fte-badge">Peak Demand: <strong>&mdash;</strong></span>
             </div>
           </div>
 
@@ -1915,11 +1913,11 @@
               <div class="flex items-center gap-2">
                 <h3 class="font-title text-base font-bold text-slate-900">Key Strategic Opportunities Forecast &amp; Sizing
                 </h3>
-                <span class="bg-indigo-50 text-indigo-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-indigo-200">Sizing
-                  Model</span>
+                <span class="bg-indigo-50 text-indigo-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-indigo-200">Live
+                  Pipeline</span>
               </div>
-              <p class="text-xs text-slate-400 mt-0.5">Modeled strategic deals with resource sizing formulas for the
-                1W–8W+ Forward Demand Timeline (of 458 Active Funnel Deals)</p>
+              <p class="text-xs text-slate-400 mt-0.5">Open EMEA deals in the 1W–8W+ horizon. Staffing figures come from
+                live Resource Requests; deals nobody has requested people for are shown as such.</p>
             </div>
             <div class="flex items-center gap-2">
               <select id="gtm-filter-horizon" onchange="filterGtmAll()" class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none">
@@ -1931,7 +1929,7 @@
                 <option value="8+ Weeks">8+ Weeks (31d+)</option>
               </select>
               <span class="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-xl border border-slate-200">
-                Strategic Deals: <strong class="text-emerald-600" id="gtm-ledger-table-count">30</strong>
+                Strategic Deals: <strong class="text-emerald-600" id="gtm-ledger-table-count">&mdash;</strong>
               </span>
             </div>
           </div>
@@ -2119,8 +2117,8 @@
           <div>
             <div class="flex flex-wrap items-center gap-2">
               <h3 class="font-title text-base font-bold text-slate-900 tracking-tight">Bench &amp; Available Staffing Capacity</h3>
-              <span class="bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">4 Unallocated (0h)</span>
-              <span class="bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">26 Partial (&lt;100%)</span>
+              <span class="bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full" id="bench-panel-unallocated">&mdash; Unallocated</span>
+              <span class="bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full" id="bench-panel-partial">&mdash; Partial</span>
             </div>
             <p class="text-xs text-slate-500 mt-0.5">Team members with 0 project assignments or partial availability ready to deploy</p>
           </div>
@@ -2152,7 +2150,7 @@
           <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          Showing <span id="modal-bench-count" class="font-bold text-slate-900">4</span> available resources
+          Showing <span id="modal-bench-count" class="font-bold text-slate-900">&mdash;</span> available resources
         </div>
       </div>
 
@@ -4040,6 +4038,15 @@
       if (document.getElementById("kpi-partial-count")) {
         document.getElementById("kpi-partial-count").textContent = `${partialStaffed} Partial (<85%)`;
       }
+      // The bench panel's own badges used to be hardcoded to "4 Unallocated"
+      // and "26 Partial", which drifted away from the list directly beneath
+      // them. Same source as the KPI tiles above.
+      if (document.getElementById("bench-panel-unallocated")) {
+        document.getElementById("bench-panel-unallocated").textContent = `${benchCount} Unallocated (0h)`;
+      }
+      if (document.getElementById("bench-panel-partial")) {
+        document.getElementById("bench-panel-partial").textContent = `${partialStaffed} Partial (<85%)`;
+      }
       animateCounter("kpi-total-hours", Math.round(totalHrs));
       if (document.getElementById("kpi-total-hours-util")) {
         document.getElementById("kpi-total-hours-util").textContent = `${overallUtilPct}% Utilized`;
@@ -4221,8 +4228,6 @@
     function resetRosterFiltersAndShowAll() {
       const searchInput = document.getElementById("roster-search");
       if (searchInput) searchInput.value = "";
-      const langSelect = document.getElementById("roster-filter-lang");
-      if (langSelect) langSelect.value = "ALL";
       const regSelect = document.getElementById("roster-filter-reg");
       if (regSelect) regSelect.value = "ALL";
       const mgrSelect = document.getElementById("roster-filter-manager");
@@ -4554,7 +4559,6 @@
     function renderRosterTable() {
       try {
         const q = (document.getElementById("roster-search")?.value || "").toLowerCase().trim();
-        const langF = document.getElementById("roster-filter-lang")?.value || "ALL";
         const regF = document.getElementById("roster-filter-reg")?.value || "ALL";
         const mgrF = (document.getElementById("roster-filter-manager")?.value || "ALL").trim();
         const riskF = document.getElementById("roster-filter-risk")?.value || "ALL";
@@ -4584,9 +4588,6 @@
             if (regF === "GSD" && !isGsdResource) return;
             if (regF === "EMEA" && isGsdResource) return;
           }
-
-          const rLangs = Array.isArray(r.languages) ? r.languages.join(", ") : (r.languages || "English");
-          if (langF !== "ALL" && !rLangs.toLowerCase().includes(langF.toLowerCase())) return;
 
           const assignments = r.assignments || [];
 
@@ -6045,7 +6046,7 @@
       let totalCap = 0;
       resources.forEach(r => {
         if (r.is_ooo) oooCount++;
-        // Each person's real capacity (16h for managers, 40h otherwise).
+        // Flat 40h for everyone, managers included. See capacityFor().
         const stdCap = capacityFor(r);
         totalCap += stdCap;
         const rHrs = (r.weekly_hours !== undefined && r.weekly_hours !== null)
@@ -6802,6 +6803,11 @@
         document.getElementById("kpi-gtm-opps").textContent = gtmNum(summary.active_opportunities);
       }
 
+      // These panels used to clear to an empty box when they had nothing to
+      // show, which is indistinguishable from a failed load. Say so instead.
+      const gtmEmpty = (msg) =>
+        `<div class="text-center text-xs text-slate-400 py-6 italic">${msg}</div>`;
+
       // 2. Regional Financial Capture Card (Globe)
       const regList = document.getElementById("gtm-regional-capture-list");
       if (regList) {
@@ -6825,6 +6831,7 @@
             </div>
           `;
         });
+        if (!regData.length) regList.innerHTML = gtmEmpty("No regional capture data in the current pipeline.");
       }
 
       // 3. Workload Project Health Card (Activity Pulse)
@@ -6846,6 +6853,7 @@
             </div>
           `;
         });
+        if (!healthData.length) healthList.innerHTML = gtmEmpty("No workloads to report health on.");
       }
 
       // 4. Delivery Strategy Led By Card (Document)
@@ -6867,6 +6875,7 @@
             </div>
           `;
         });
+        if (!strategyData.length) strategyList.innerHTML = gtmEmpty("No delivery strategy breakdown available.");
       }
 
       // 5. Render Horizon Cards & Supply-Demand Table
@@ -6890,10 +6899,24 @@
         document.getElementById("gtm-total-weighted-acv-badge").innerHTML = `Weighted Pipeline: <strong>${(wtd === null || wtd === undefined || wtd === "") ? "—" : wtd}</strong>`;
       }
       if (document.getElementById("gtm-total-demand-fte-badge")) {
-        const dfte = demandTimeline.total_forward_demand_fte;
+        // Peak concurrent headcount requested in any single week, NOT a sum of
+        // the buckets: the same people work across consecutive weeks, so
+        // adding the buckets would count them several times over.
+        const dfte = demandTimeline.peak_demand_fte;
+        const unsized = demandTimeline.unsized_opportunities;
+        const cover = (unsized === null || unsized === undefined || !unsized)
+          ? ""
+          : ` <span class="text-[10px] font-normal text-slate-400">(${unsized} deals have no request yet)</span>`;
         document.getElementById("gtm-total-demand-fte-badge").innerHTML = (dfte === null || dfte === undefined)
-          ? `Forward Demand: <strong>—</strong>`
-          : `Forward Demand: <strong>${dfte} FTEs</strong>`;
+          ? `Peak Demand: <strong>—</strong>`
+          : `Peak Demand: <strong>${dfte} FTEs</strong>${cover}`;
+        document.getElementById("gtm-total-demand-fte-badge").title =
+          "Busiest single week across the horizon, from live Resource Requests (weekly requested hours / 40). Not a total \u2014 the buckets overlap.";
+      }
+
+      if (!buckets.length) {
+        container.innerHTML = `<div class="col-span-full text-center text-xs text-slate-400 py-6 italic">No open deals in the forward horizon.</div>`;
+        return;
       }
 
       buckets.forEach(b => {
@@ -6919,9 +6942,10 @@
             </span>
           </div>
           <div>
-            <div class="flex items-baseline gap-1.5">
+            <div class="flex items-baseline gap-1.5" title="Peak concurrent people requested in any single week of this window, from live Resource Requests.">
               <span class="text-xl font-extrabold text-slate-900">${b.demand_fte}</span>
-              <span class="text-[11px] font-bold text-indigo-600">FTE Demand</span>
+              <span class="text-[11px] font-bold text-indigo-600">Peak FTE</span>
+              ${b.unsized_count ? `<span class="text-[9px] text-slate-400" title="${b.unsized_count} deal(s) closing in this window have no Resource Request yet, so they are not in the figure on the left.">+${b.unsized_count} unrequested</span>` : ``}
             </div>
             <div class="text-[11px] text-slate-500 mt-0.5 flex justify-between">
               <span>${b.opportunity_count} Deals &bull; ${b.total_acv_formatted}</span>
@@ -6944,6 +6968,10 @@
       tbody.innerHTML = "";
 
       const buckets = demandTimeline.buckets || [];
+      if (!buckets.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-xs text-slate-400 italic">No forward horizon data available.</td></tr>`;
+        return;
+      }
       buckets.forEach(b => {
         const isDeficit = b.status === "DEFICIT";
         const balanceBadge = isDeficit
@@ -6960,7 +6988,7 @@
             <span class="text-[10px] text-slate-400 block font-medium">Weighted: ${b.weighted_acv_formatted}</span>
           </td>
           <td class="p-3 font-extrabold text-blue-700">${b.available_supply_fte} FTEs</td>
-          <td class="p-3 font-extrabold text-purple-700">${b.demand_fte} FTEs <span class="text-[10px] text-slate-400 font-normal">(${b.unweighted_fte} unweighted)</span></td>
+          <td class="p-3 font-extrabold text-purple-700">${b.demand_fte} FTEs <span class="text-[10px] text-slate-400 font-normal">${b.sized_count ? `(${b.sized_count} of ${b.opportunity_count} deals requested)` : `(no requests yet)`}</span></td>
           <td class="p-3">${balanceBadge}</td>
           <td class="p-3 text-right">
             <div class="text-xs text-slate-600 font-medium truncate max-w-xs ml-auto">${(b.accounts || []).slice(0, 3).join(", ") || "None"}</div>
@@ -7055,7 +7083,7 @@
           </td>
           <td class="p-3.5 border-b border-slate-100 text-right">
             <div class="flex items-center justify-end gap-2">
-              <button onclick="filterPortfolioCustomer('${w.account_name.split(' ')[0]}')" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
+              <button onclick="filterPortfolioCustomer(${dEsc(JSON.stringify(String(w.account_name || "")))})" class="text-slate-400 hover:text-indigo-600 p-1 transition" title="Edit / View in Staffing">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
               </button>
               <button class="text-slate-400 hover:text-rose-600 p-1 transition" title="Delete entry">
@@ -7141,44 +7169,64 @@
           catBadge = `<span class="bg-[#f0fdf4] text-[#166534] border border-[#bbf7d0] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider">COMMIT</span>`;
         }
 
+        // FTE is now only ever a real Resource Request, never a guess. An
+        // opportunity nobody has raised a request against shows its absence
+        // rather than the flat 2.0 FTE it used to be given - that constant was
+        // 58% of the funnel and looked identical to a measured figure.
+        const hasFte = o.required_resources !== null && o.required_resources !== undefined;
+        const fteText = hasFte ? `${o.required_resources} FTEs` : "no request";
+        const fteMark = hasFte
+          ? `<span class="text-[9px] font-bold text-indigo-500 ml-0.5" title="Peak concurrent people requested in any one week, from ${o.fte_request_weeks || 0} week(s) of live Resource Requests (weekly requested hours / 40).">RR</span>`
+          : "";
+        const probMark = o.probability_is_estimated
+          ? `<span class="text-[9px] font-bold text-amber-600 ml-0.5" title="No probability recorded at source. This is the stage convention (02&rarr;30%, 03&rarr;50%, signed&rarr;100%, otherwise 20%), not a forecast.">est</span>`
+          : "";
+
         const tr = document.createElement("tr");
         tr.className = "hover:bg-slate-50/80 transition";
         tr.innerHTML = `
           <td class="p-3.5 border-b border-slate-100">
-            <div class="font-bold text-slate-900">${o.account_name}</div>
-            <div class="text-[10px] text-slate-400 font-mono mt-0.5">${o.opportunity_id}</div>
+            <div class="font-bold text-slate-900">${dEsc(o.account_name)}</div>
+            <div class="text-[10px] text-slate-400 font-mono mt-0.5">${dEsc(o.opportunity_id) || "&mdash;"}</div>
           </td>
           <td class="p-3.5 border-b border-slate-100">
-            <div class="font-semibold text-slate-800 text-xs">${o.opportunity_name}</div>
+            <div class="font-semibold text-slate-800 text-xs">${dEsc(o.opportunity_name)}</div>
             <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1">
-              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">${o.horizon_bucket}</span>
-              <span>Target Close: <strong>${o.close_date}</strong></span>
+              <span class="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded">${dEsc(o.horizon_bucket)}</span>
+              <span>Target Close: <strong>${o.close_date ? dEsc(o.close_date) : "not set"}</strong></span>
             </div>
           </td>
           <td class="p-3.5 border-b border-slate-100">
             <div>${catBadge}</div>
-            <div class="text-[10px] text-slate-600 font-medium mt-1">${o.stage}</div>
+            <div class="text-[10px] text-slate-600 font-medium mt-1">${o.stage ? dEsc(o.stage) : "&mdash;"}</div>
           </td>
           <td class="p-3.5 border-b border-slate-100">
             <div class="flex items-center gap-1 text-xs">
-              <span class="font-extrabold text-slate-900">${o.probability_pct}%</span>
+              <span class="font-extrabold text-slate-900">${o.probability_pct}%</span>${probMark}
               <span class="text-slate-400">&bull;</span>
-              <span class="font-bold text-slate-700">${o.required_resources} FTEs</span>
+              <span class="font-bold text-slate-700">${fteText}</span>${fteMark}
             </div>
             <div class="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-              <div class="bg-indigo-600 h-1.5 rounded-full" style="width: ${o.probability_pct}%"></div>
+              <div class="${o.probability_is_estimated ? 'bg-slate-400' : 'bg-indigo-600'} h-1.5 rounded-full" style="width: ${o.probability_pct}%"></div>
             </div>
           </td>
           <td class="p-3.5 border-b border-slate-100">
-            <div class="text-sm font-extrabold text-purple-700">${o.weighted_demand_fte} FTE</div>
-            <span class="text-[9px] text-slate-400 font-mono">${o.probability_pct}% × ${o.required_resources} FTEs</span>
+            <div class="text-sm font-extrabold ${hasFte ? 'text-purple-700' : 'text-slate-300'}">${hasFte ? o.weighted_demand_fte + " FTE" : "&mdash;"}</div>
+            <span class="text-[9px] text-slate-400 font-mono">${hasFte
+              ? `${o.probability_pct}% &times; ${o.required_resources} FTEs`
+              : "no resource request"}</span>
           </td>
           <td class="p-3.5 border-b border-slate-100">
-            <div class="font-extrabold text-emerald-600 text-sm">${o.acv_formatted}</div>
-            <div class="text-[10px] text-slate-400 font-medium">Weighted: ${o.weighted_acv_formatted}</div>
+            <div class="font-extrabold text-emerald-600 text-sm">${dEsc(o.acv_formatted)}</div>
+            <div class="text-[10px] text-slate-400 font-medium">Weighted: ${dEsc(o.weighted_acv_formatted)}</div>
           </td>
           <td class="p-3.5 border-b border-slate-100 text-right">
-            <button onclick="openSoftBookModal('${o.opportunity_id}', '${o.account_name.replace(/'/g, "\\'")}', ${o.required_resources}, '${o.horizon_bucket}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
+            <button ${hasFte ? "" : "disabled"}
+                    onclick="openSoftBookModal(${dEsc(JSON.stringify(String(o.opportunity_id || "")))}, ${dEsc(JSON.stringify(String(o.account_name || "")))}, ${Number(o.required_resources) || 0}, ${dEsc(JSON.stringify(String(o.horizon_bucket || "")))})"
+                    title="${hasFte ? "Find people with free capacity for this opportunity" : "Nobody has raised a Resource Request against this opportunity, so there is no FTE figure to pre-staff against"}"
+                    class="${hasFte
+                      ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 cursor-pointer'
+                      : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'} border text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs inline-flex items-center gap-1">
               <span>+ Pre-Staff</span>
             </button>
           </td>
@@ -7275,14 +7323,30 @@
           : `${c.allocPct}% allocated • ${c.freeHrs}h free`
       }));
 
+      // The opportunity list on this tab is EMEA-wide (pso_pipeline has no
+      // manager hierarchy), but these candidates come from globalData.resources,
+      // which IS org-scoped and IS manager-filtered. Say so: silently offering a
+      // 59-person shortlist against an EMEA-wide deal looks like "nobody is
+      // free" rather than "you are only looking at part of the org".
+      const scopeBits = [];
+      const scopeOrg = (globalData && (globalData.org_name || globalData.org_ldap)) || "";
+      if (scopeOrg) scopeBits.push(`${dEsc(scopeOrg)}'s org`);
+      if (typeof showManagers !== "undefined" && !showManagers) scopeBits.push("managers hidden");
+      const scopeNote = scopeBits.length
+        ? `<p class="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5">
+             Candidates below are drawn from <strong>${scopeBits.join(" &bull; ")}</strong>, not all of EMEA.
+           </p>`
+        : "";
+
       const modalHtml = `
         <div id="softbook-modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
           <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 flex flex-col gap-4">
             <div class="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
                 <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Pre-Staffing Simulation</span>
-                <h3 class="font-title text-base font-bold text-slate-900 mt-1">${accName}</h3>
-                <p class="text-xs text-slate-400">Target Horizon: ${horizon} &bull; Sizing: ${reqResources} FTEs</p>
+                <h3 class="font-title text-base font-bold text-slate-900 mt-1">${dEsc(accName)}</h3>
+                <p class="text-xs text-slate-400">Target Horizon: ${dEsc(horizon)} &bull; Sizing: ${reqResources} FTEs</p>
+                ${scopeNote}
               </div>
               <button onclick="document.getElementById('softbook-modal-backdrop').remove()" class="text-slate-400 hover:text-slate-600 p-1">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>

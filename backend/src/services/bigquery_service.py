@@ -784,22 +784,39 @@ def query_emea_pipeline_data(
         AND _PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `concord-prod.service_cloudbi.pso_pipeline`)
         AND close_date BETWEEN PARSE_DATE('%Y-%m-%d', @start_date) AND PARSE_DATE('%Y-%m-%d', @end_date)
     )
+    -- NULLIF(TRIM(...)) on every ANY_VALUE is load-bearing, not defensive noise.
+    -- These columns hold '' far more often than NULL, and '' is not NULL, so
+    -- `COALESCE(ANY_VALUE(col), 'default')` NEVER fired: it returned the blank.
+    -- Worse, ANY_VALUE picks an arbitrary row, so on an opportunity with a mix
+    -- of blank and populated lines the answer changed between refreshes.
+    -- Measured on the 815 EMEA opportunities in scope:
+    --   primary_solution     blank on 815 (100%) -> every workload showed the
+    --                        hardcoded default as though it were real data
+    --   offering             295 always blank, 403 blank-on-some-lines
+    --   project_sub_region   497 always blank, 273 blank-on-some-lines
+    --   country              73 always blank
+    --   workload_id          815 (100%)
+    -- Nulling the blanks fixes both halves at once: ANY_VALUE skips NULLs, so
+    -- a populated line always wins, and COALESCE can finally see a NULL.
     SELECT
       opportunity_id,
-      ANY_VALUE(opp_name) AS opp_name,
-      ANY_VALUE(account_name) AS account_name,
-      ANY_VALUE(stage_name) AS stage_name,
-      ANY_VALUE(stage_simplified) AS stage_simplified,
-      ANY_VALUE(forecast_category) AS forecast_category,
+      ANY_VALUE(NULLIF(TRIM(opp_name), '')) AS opp_name,
+      ANY_VALUE(NULLIF(TRIM(account_name), '')) AS account_name,
+      ANY_VALUE(NULLIF(TRIM(stage_name), '')) AS stage_name,
+      ANY_VALUE(NULLIF(TRIM(stage_simplified), '')) AS stage_simplified,
+      ANY_VALUE(NULLIF(TRIM(forecast_category), '')) AS forecast_category,
       COALESCE(ANY_VALUE(probability), 0) AS probability,
       'EMEA' AS region,
-      COALESCE(ANY_VALUE(country), 'Unknown') AS country,
-      COALESCE(ANY_VALUE(project_sub_region), '') AS project_sub_region,
-      COALESCE(ANY_VALUE(offering), 'Standard PSO') AS offering,
+      COALESCE(ANY_VALUE(NULLIF(TRIM(country), '')), 'Unknown') AS country,
+      COALESCE(ANY_VALUE(NULLIF(TRIM(project_sub_region), '')), '') AS project_sub_region,
+      -- No invented default for offering or solution. They drive the GSD/Field
+      -- split and the workload label, and a fabricated value there is
+      -- indistinguishable from a real one on screen. Empty means "not stated".
+      COALESCE(ANY_VALUE(NULLIF(TRIM(offering), '')), '') AS offering,
       COALESCE(LOGICAL_OR(dc_attached), false) AS dc_attached,
-      COALESCE(ANY_VALUE(workload_id), opportunity_id) AS workload_id,
+      COALESCE(ANY_VALUE(NULLIF(TRIM(workload_id), '')), opportunity_id) AS workload_id,
       COALESCE(SUM(total_sale_price_usd), 0) AS total_sale_price_usd,
-      COALESCE(ANY_VALUE(primary_solution), 'Cloud Solutions') AS solution,
+      COALESCE(ANY_VALUE(NULLIF(TRIM(primary_solution), '')), '') AS solution,
       COALESCE(ANY_VALUE(consultant_hours_purchased), 0) AS consultant_hours_purchased,
       COALESCE(ANY_VALUE(sce_hours_purchased), 0) AS sce_hours_purchased,
       CAST(ANY_VALUE(close_date) AS STRING) AS close_date
@@ -807,7 +824,6 @@ def query_emea_pipeline_data(
     GROUP BY opportunity_id
     ORDER BY close_date DESC
     """
-    query = query.replace("__LDAP_EXCLUSIONS__", EXCLUDED_LDAP_SQL)
     try:
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
@@ -818,8 +834,11 @@ def query_emea_pipeline_data(
         results = client.query(query, job_config=job_config).result(timeout=45)
         return [dict(row) for row in results]
     except Exception as e:
+        # Deliberately NOT `return []`. An empty pipeline renders as a tab full
+        # of zeroes that looks like a quiet quarter rather than a broken query.
+        # The caller degrades this on its own terms and tells the user.
         logger.warning(f"Pipeline query failed: {e}")
-        return []
+        raise
 
 def query_pipeline_resource_demand(
     client: bigquery.Client,
@@ -875,15 +894,22 @@ def query_pipeline_resource_demand(
     pipe AS (
       SELECT
         NULLIF(TRIM(eighteen_digit_opp_id), '') AS opp_id,
-        ANY_VALUE(opp_name)                     AS opp_name,
-        ANY_VALUE(account_name)                 AS account_name,
-        ANY_VALUE(opportunity_stage)            AS opportunity_stage,
-        ANY_VALUE(opportunity_sub_region)       AS opp_sub_region
+        ANY_VALUE(NULLIF(TRIM(opp_name), ''))            AS opp_name,
+        ANY_VALUE(NULLIF(TRIM(account_name), ''))        AS account_name,
+        ANY_VALUE(NULLIF(TRIM(opportunity_stage), ''))   AS opportunity_stage,
+        ANY_VALUE(NULLIF(TRIM(opportunity_sub_region), '')) AS opp_sub_region
       FROM `concord-prod.service_cloudbi.projects`
       WHERE _PARTITIONTIME   = (SELECT pt FROM pt_pr)
         AND project_region   = 'EMEA'
         AND stage_simplified = 'Pipeline'
-        AND offering         = 'Delivery Center'
+        -- DELIBERATELY NOT filtered on offering = 'Delivery Center'.
+        -- GSD is a property of the REQUESTED ROLE, not of the opportunity's
+        -- offering label, and the rr CTE below already enforces that via
+        -- `DC Googler%` / `DC Flex%`. Filtering here as well dropped every
+        -- deal that books DC people under some other offering label.
+        -- Measured: 50 -> 70 opportunities and 68,719 -> 84,611 horizon hours,
+        -- i.e. the tab was hiding ~19% (15,892h, ~7.6 FTE-years) of real
+        -- Delivery Center demand.
       GROUP BY opp_id
       HAVING opp_id IS NOT NULL
     ),
@@ -970,8 +996,11 @@ def query_pipeline_resource_demand(
             out.append(d)
         return out
     except Exception as e:
+        # NOT `return []`. Since the demand timeline is now driven entirely by
+        # these rows, an empty result silently reports zero demand across every
+        # horizon - which reads as "we have plenty of capacity".
         logger.warning(f"Pipeline resource-demand query failed: {e}")
-        return []
+        raise
 
 def fetch_projects_by_ldap(
     ldap: str,
@@ -1015,6 +1044,13 @@ def fetch_projects_by_ldap(
             `{billing_project_id}.{dataset}.projects` AS p
             ON ws.project_id = p.project_id
         WHERE ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.weekly_schedules`)
+            -- projects is a DAILY-partitioned snapshot table (~1,074 partitions,
+            -- 75,487 projects each). Without pinning it the join matched the
+            -- same project once per historical snapshot, so this scanned the
+            -- whole table and fanned the result out by three orders of
+            -- magnitude. The caller swallowed the resulting failure and
+            -- returned [], which rendered as "this person has no projects".
+            AND p._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.projects`)
         ORDER BY 
             p.project_start_date DESC
     """
@@ -1057,6 +1093,9 @@ def fetch_accounts_by_ldap(
             WHERE 
                 p.vector_account_id IS NOT NULL
                 AND ws._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.weekly_schedules`)
+                -- See fetch_projects_by_ldap: projects is a daily snapshot and
+                -- MUST be pinned, or every project matches once per partition.
+                AND p._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.projects`)
         )
         SELECT 
             p.vector_account_id,
@@ -1067,6 +1106,8 @@ def fetch_accounts_by_ldap(
         INNER JOIN 
             ldap_accounts AS la
             ON p.vector_account_id = la.vector_account_id
+        WHERE
+            p._PARTITIONDATE = (SELECT MAX(_PARTITIONDATE) FROM `{billing_project_id}.{dataset}.projects`)
         GROUP BY 
             p.vector_account_id
         ORDER BY 

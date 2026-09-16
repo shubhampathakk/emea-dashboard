@@ -692,6 +692,22 @@ def build_dashboard_payload(
     # No invented default: if there is no capacity there is no utilisation.
     overall_util = round((total_scheduled_hrs / total_cap) * 100, 1) if total_cap > 0 else 0.0
 
+    # One formatter for every money figure on this tab. The previous inline
+    # f-strings used `int(val / 1000)`, which TRUNCATES: a $999 deal rendered as
+    # "$0k" and a $1,900 deal as "$1k". They also jumped straight from "$999k"
+    # to "$1.00M" in one place and used a bare "$1,234,567" in another, so the
+    # same value was formatted three different ways depending on where you
+    # looked.
+    def _fmt_usd(amount: float) -> str:
+        v = float(amount or 0.0)
+        if v <= 0:
+            return "$0"
+        if v >= 1_000_000:
+            return f"${v / 1_000_000:.2f}M"
+        if v >= 1_000:
+            return f"${round(v / 1_000):,}k"
+        return f"${round(v):,}"
+
     # Helper: Map EMEA countries to canonical sub-regions
     def _map_emea_subregion(country: str, sub_reg_raw: str = "") -> str:
         c = (country or "").strip().lower()
@@ -756,13 +772,79 @@ def build_dashboard_payload(
         "Specialized & Other": {"count": 0, "revenue": 0.0}
     }
 
+    # `unsized_count` - pipeline opportunities in this bucket that have no
+    #                   Resource Request behind them, so we genuinely do not
+    #                   know what they will need. They contribute 0 demand.
+    # `sized_count`   - opportunities backed by at least one real request.
+    def _horizon_bucket(name: str, code: str) -> Dict[str, Any]:
+        return {
+            "name": name, "bucket": code, "opportunity_count": 0,
+            "total_acv": 0.0, "weighted_acv": 0.0,
+            "peak_fte": 0.0, "demand_fte": 0.0,
+            "unsized_count": 0, "sized_count": 0,
+            "accounts": [],
+        }
+
     horizon_data = {
-        "1 Week": {"name": "1 Week (Next 7d)", "bucket": "1 Week", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
-        "2 Weeks": {"name": "2 Weeks (8–14d)", "bucket": "2 Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
-        "3 Weeks": {"name": "3 Weeks (15–21d)", "bucket": "3 Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
-        "4 Weeks": {"name": "4 Weeks (22–30d)", "bucket": "4 Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
-        "8+ Weeks": {"name": "8+ Weeks (31d+)", "bucket": "8+ Weeks", "opportunity_count": 0, "total_acv": 0.0, "weighted_acv": 0.0, "unweighted_fte": 0.0, "demand_fte": 0.0, "accounts": []},
+        "1 Week":  _horizon_bucket("1 Week (Next 7d)", "1 Week"),
+        "2 Weeks": _horizon_bucket("2 Weeks (8–14d)", "2 Weeks"),
+        "3 Weeks": _horizon_bucket("3 Weeks (15–21d)", "3 Weeks"),
+        "4 Weeks": _horizon_bucket("4 Weeks (22–30d)", "4 Weeks"),
+        "8+ Weeks": _horizon_bucket("8+ Weeks (31d+)", "8+ Weeks"),
     }
+
+    # ---------------------------------------------------------------------
+    # WHERE DEMAND FTE COMES FROM
+    #
+    # It used to be invented. Measured over the 815 EMEA opportunities in
+    # scope, the old heuristic sized 58% of them from a hardcoded literal 2.0,
+    # 36% from `deal_value / 75_000`, and only 6% from purchased hours - and
+    # even those 6% were wrong, for three separate reasons:
+    #
+    #   * `consultant_hours_purchased` is junk on the largest rows. One
+    #     opportunity carries 9,600,000 hours against a $400k deal ($0.04/hr)
+    #     and another 2,400,000 hours against a $0 deal. Those two alone
+    #     produced 75,000 FTE of "demand".
+    #   * `hours / 160` is FTE-MONTHS of effort, but it was being compared
+    #     against a bench HEADCOUNT. Different units.
+    #   * `term_months` cannot fix the units: it reads a default 12 on
+    #     essentially every row.
+    #   * deal value cannot stand in for effort either - implied rates across
+    #     this dataset run from $0.04 to $13,020 per hour because
+    #     total_sale_price_usd bundles licensing and consumption with
+    #     services. A pure licensing deal scored 12 FTE of delivery demand.
+    #
+    # So we stopped guessing and use the Resource Requests, which are what
+    # delivery leads actually raise: real requested roles with a real weekly
+    # hour spread. A week's concurrent requirement is simply hours / 40, which
+    # IS a headcount and therefore IS comparable to bench supply.
+    #
+    # 62 of the 70 requested opportunities also appear in the pipeline feed,
+    # so the ledger and the timeline line up for the overwhelming majority.
+    # ---------------------------------------------------------------------
+    demand_week_hours: Dict[str, float] = {}
+    demand_by_opp: Dict[str, Dict[str, float]] = {}
+    for _r in (demand_rows or []):
+        _oid = str(_r.get("opp_id") or "").strip()
+        for _wk in (_r.get("weeks") or []):
+            _w = str(_wk.get("w") or "")[:10]
+            if not _w:
+                continue
+            _h = float(_wk.get("h") or 0.0)
+            demand_week_hours[_w] = demand_week_hours.get(_w, 0.0) + _h
+            if _oid:
+                demand_by_opp.setdefault(_oid, {})
+                demand_by_opp[_oid][_w] = demand_by_opp[_oid].get(_w, 0.0) + _h
+
+    def _peak_fte(spread: Dict[str, float]) -> Optional[float]:
+        """Highest number of people needed in any single week of the spread.
+
+        The peak, not the sum: summing weekly hours would give FTE-weeks of
+        effort, which is not a headcount and cannot be set against the bench.
+        """
+        if not spread:
+            return None
+        return round(max(spread.values()) / STANDARD_WEEKLY_CAPACITY, 1)
 
     for p in pipeline_rows:
         val = float(p.get("total_sale_price_usd") or 0.0)
@@ -806,8 +888,16 @@ def build_dashboard_payload(
         if is_dc:
             reg_capture[sub_reg]["services_amount"] += val
 
-        prob = int(float(p.get("probability") or 0))
-        if prob == 0:
+        prob_raw = float(p.get("probability") or 0)
+        prob_is_estimated = prob_raw <= 0
+        if not prob_is_estimated:
+            prob = int(prob_raw)
+        else:
+            # Salesforce leaves probability at 0 on 263 of 815 EMEA
+            # opportunities (32%). We still need a weight to rank the funnel,
+            # but the number below is a STAGE CONVENTION, not data - so it is
+            # flagged and the UI must show it as an estimate. It used to be
+            # silently indistinguishable from a real probability.
             if "03" in stage_raw: prob = 50
             elif "02" in stage_raw: prob = 30
             elif is_signed: prob = 100
@@ -823,21 +913,13 @@ def build_dashboard_payload(
 
         _, horizon_code, _ = _get_horizon_bucket(c_date, today)
 
-        # sce_hours_purchased DUPLICATES consultant_hours_purchased: the two are
-        # exactly equal on 2,073 of 2,422 EMEA opportunities (86%) and only 33
-        # genuinely differ. Adding them double-counted the effort and inflated
-        # every demand-FTE figure on this tab. Take the larger, never the sum.
-        c_hrs = max(
-            float(p.get("consultant_hours_purchased") or 0.0),
-            float(p.get("sce_hours_purchased") or 0.0),
-        )
-        if 0 < c_hrs <= 2000:
-            req_fte = max(1.0, round(c_hrs / 160.0, 1))
-        elif val > 0:
-            req_fte = max(1.0, min(12.0, round(val / 75_000.0, 1)))
-        else:
-            req_fte = 2.0
-        weighted_fte = round(req_fte * (prob / 100.0), 1)
+        # An opportunity's staffing need is whatever its delivery lead actually
+        # asked for, or nothing at all. See the long note above demand_by_opp
+        # for why purchased hours and deal value were both abandoned.
+        opp_spread = demand_by_opp.get(str(p.get("opportunity_id") or "").strip())
+        req_fte = _peak_fte(opp_spread or {})
+        fte_basis = "resource_request" if req_fte is not None else "none"
+        weighted_fte = None if req_fte is None else round(req_fte * (prob / 100.0), 1)
 
         is_open = not is_signed
         if is_open:
@@ -855,17 +937,31 @@ def build_dashboard_payload(
                         h["opportunity_count"] += 1
                         h["total_acv"] += val
                         h["weighted_acv"] += val * (prob / 100.0)
-                        h["unweighted_fte"] = round(h["unweighted_fte"] + req_fte, 1)
-                        h["demand_fte"] = round(h["demand_fte"] + weighted_fte, 1)
+                        # Counted, not guessed at. The bucket's demand_fte is
+                        # filled in later from the aggregate weekly curve, so
+                        # all we record per opportunity is whether anyone has
+                        # actually said what it will need.
+                        if req_fte is None:
+                            h["unsized_count"] += 1
+                        else:
+                            h["sized_count"] += 1
                         if acc_name not in h["accounts"] and len(h["accounts"]) < 4:
                             h["accounts"].append(acc_name)
                 except Exception:
                     pass
 
+        # Blank rather than invented. `solution` is empty on 100% of rows at
+        # source, so the old "Cloud Infrastructure"/"Cloud Solutions" defaults
+        # were shown on EVERY workload as though they were real - and the two
+        # call sites disagreed with each other. The frontend renders "" as a
+        # dash.
+        solution_val = str(p.get("solution") or "").strip()
+        offering_val = str(p.get("offering") or "").strip()
+
         status_badge = "Delivered" if is_signed else ("Missing Date" if not c_date else "In-Flight")
         workloads.append({
-            "workload_id": p.get("workload_id") or p.get("opportunity_id") or "WL-100",
-            "workload_solution": p.get("solution") or "Cloud Infrastructure",
+            "workload_id": p.get("workload_id") or p.get("opportunity_id") or "",
+            "workload_solution": solution_val,
             "account_name": acc_name,
             "region": "EMEA",
             "sub_region": f"{sub_reg} ({country})" if country != "Unknown" else sub_reg,
@@ -876,25 +972,33 @@ def build_dashboard_payload(
             # when this is empty.
             "program_manager": "",
             "implementation_led_by": "Delivery Center (GDC)" if is_dc else "Field PSO",
-            "partner": p.get("offering") or "Google Cloud PSO",
-            "services_revenue": f"${round(val):,}" if val > 0 else "$0",
-            "schedule_date": c_date[:10] if c_date else "2026-12-31"
+            "partner": offering_val,
+            "services_revenue": _fmt_usd(val),
+            # No fabricated close date. "" makes the UI show "no date", which is
+            # the truth; "2026-12-31" looked like a real commitment.
+            "schedule_date": c_date[:10] if c_date else ""
         })
 
         opportunities.append({
-            "opportunity_id": p.get("opportunity_id") or "006...",
-            "opportunity_name": p.get("opp_name") or "Cloud Modernization Engagement",
+            "opportunity_id": p.get("opportunity_id") or "",
+            "opportunity_name": p.get("opp_name") or "(Unnamed opportunity)",
             "account_name": acc_name,
             "horizon_bucket": horizon_code,
-            "close_date": c_date[:10] if c_date else "2026-12-31",
+            "close_date": c_date[:10] if c_date else "",
             "category": cat,
-            "stage": stage_raw or "02 - Solution Dev",
+            "stage": stage_raw or "",
             "probability_pct": prob,
+            "probability_is_estimated": prob_is_estimated,
             "required_resources": req_fte,
             "weighted_demand_fte": weighted_fte,
-            "acv_formatted": f"${(val / 1_000_000):.2f}M" if val >= 1_000_000 else (f"${int(val / 1000):,}k" if val > 0 else "$0"),
-            "weighted_acv_formatted": f"${(val * (prob / 100.0) / 1_000_000):.2f}M" if val >= 1_000_000 else (f"${int(val * (prob / 100.0) / 1000):,}k" if val > 0 else "$0"),
-            "workload_solution": p.get("solution") or "Cloud Solutions",
+            "fte_basis": fte_basis,
+            # How many distinct weeks of requested work sit behind req_fte.
+            # Lets the UI say "peak of N people across W weeks" rather than
+            # presenting a bare number with no provenance.
+            "fte_request_weeks": len(opp_spread or {}),
+            "acv_formatted": _fmt_usd(val),
+            "weighted_acv_formatted": _fmt_usd(val * (prob / 100.0)),
+            "workload_solution": solution_val,
             "industry": country if country != "Unknown" else "EMEA"
         })
 
@@ -918,37 +1022,74 @@ def build_dashboard_payload(
             except Exception:
                 pass
 
+    # Fold the real weekly demand curve into the horizon buckets. Each week of
+    # requested work lands in the bucket its start date falls into; a week that
+    # has already begun but not finished counts as "this week".
+    _bucket_windows = [("1 Week", 0, 7), ("2 Weeks", 8, 14), ("3 Weeks", 15, 21),
+                       ("4 Weeks", 22, 30), ("8+ Weeks", 31, 10 ** 6)]
+    for _w, _hrs in demand_week_hours.items():
+        try:
+            _diff = (datetime.date.fromisoformat(_w) - today).days
+        except Exception:
+            continue
+        if _diff <= -7:
+            continue  # fully in the past
+        _diff = max(_diff, 0)
+        for _code, _lo, _hi in _bucket_windows:
+            if _lo <= _diff <= _hi:
+                _b = horizon_data[_code]
+                _fte = _hrs / STANDARD_WEEKLY_CAPACITY
+                # PEAK, not sum. Summing weeks would give FTE-weeks of effort;
+                # the question this tab answers is "how many people at once".
+                _b["peak_fte"] = max(_b["peak_fte"], round(_fte, 1))
+                break
+
     cum_supply = bench_count
     buckets_list = []
     total_forward_weighted_acv = 0.0
-    total_forward_demand_fte = 0.0
+    peak_forward_demand_fte = 0.0
 
     for b_key in ["1 Week", "2 Weeks", "3 Weeks", "4 Weeks", "8+ Weeks"]:
         b_info = horizon_data[b_key]
+        b_info["demand_fte"] = b_info["peak_fte"]
         cum_supply += roll_offs_by_horizon.get(b_key, 0)
         net_bal = round(cum_supply - b_info["demand_fte"], 1)
         total_forward_weighted_acv += b_info["weighted_acv"]
-        total_forward_demand_fte += b_info["demand_fte"]
+        peak_forward_demand_fte = max(peak_forward_demand_fte, b_info["demand_fte"])
 
         buckets_list.append({
             "name": b_info["name"],
             "bucket": b_info["bucket"],
             "opportunity_count": b_info["opportunity_count"],
             "total_acv": b_info["total_acv"],
-            "total_acv_formatted": f"${(b_info['total_acv'] / 1_000_000):.2f}M",
+            "total_acv_formatted": _fmt_usd(b_info["total_acv"]),
             "weighted_acv": b_info["weighted_acv"],
-            "weighted_acv_formatted": f"${(b_info['weighted_acv'] / 1_000_000):.2f}M",
+            "weighted_acv_formatted": _fmt_usd(b_info["weighted_acv"]),
             "available_supply_fte": cum_supply,
-            "unweighted_fte": b_info["unweighted_fte"],
             "demand_fte": b_info["demand_fte"],
+            # How much of this bucket's pipeline has anyone actually asked for
+            # people for. demand_fte only reflects the sized ones.
+            "unsized_count": b_info["unsized_count"],
+            "sized_count": b_info["sized_count"],
             "net_balance_fte": net_bal,
             "status": "SURPLUS" if net_bal >= 0 else "DEFICIT",
             "accounts": b_info["accounts"]
         })
 
+    total_unsized = sum(h["unsized_count"] for h in horizon_data.values())
+    total_sized = sum(h["sized_count"] for h in horizon_data.values())
     demand_timeline = {
-        "total_forward_weighted_acv": f"${(total_forward_weighted_acv / 1_000_000):.2f}M",
-        "total_forward_demand_fte": round(total_forward_demand_fte, 1),
+        "total_forward_weighted_acv": _fmt_usd(total_forward_weighted_acv),
+        # The busiest single week in the horizon, not a total. Adding the
+        # buckets together would double-count the same people working across
+        # consecutive weeks.
+        "peak_demand_fte": round(peak_forward_demand_fte, 1),
+        "demand_basis": "resource_requests",
+        # Companion figures for the headline. Without them the FTE number
+        # looks like a complete measurement of the funnel when in fact most
+        # opportunities have no staffing request behind them yet.
+        "unsized_opportunities": total_unsized,
+        "sized_opportunities": total_sized,
         "buckets": buckets_list
     }
 
@@ -1144,13 +1285,38 @@ def get_dashboard_data(
         # NOTE: pso_pipeline carries no manager hierarchy, so the pipeline stays
         # EMEA-wide even when the roster is scoped to one org. The frontend
         # labels this so the supply-vs-demand gap is not read as like-for-like.
-        pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
+        # The pipeline feeds only the Pipeline & Demand tab. If it breaks, the
+        # roster is still perfectly good, so do not drag the whole dashboard
+        # into the stale snapshot - degrade this tab alone and say why. These
+        # two queries now raise rather than returning [], precisely so this
+        # decision is made here instead of being hidden in the service.
+        pipeline_rows: List[Dict[str, Any]] = []
+        demand_rows: List[Dict[str, Any]] = []
+        pipeline_error = None
+        demand_error = None
+        try:
+            pipeline_rows = query_emea_pipeline_data(bq_client, start_date=clean_start, end_date=clean_end)
+        except Exception as pe:
+            if _is_auth_error(pe):
+                raise
+            logger.warning(f"Pipeline unavailable, rendering roster only: {pe}")
+            pipeline_error = str(pe)[:300]
         # Forward staffing asks for pipeline deals. Independent of the close-date
         # window above: a request's weeks are its own delivery window.
-        demand_rows = query_pipeline_resource_demand(bq_client)
+        try:
+            demand_rows = query_pipeline_resource_demand(bq_client)
+        except Exception as de:
+            if _is_auth_error(de):
+                raise
+            logger.warning(f"Resource-request demand unavailable: {de}")
+            demand_error = str(de)[:300]
         payload = build_dashboard_payload(
             delivery_rows, pipeline_rows, demand_rows, user_token=user_token
         )
+        if pipeline_error:
+            payload["pipeline_error"] = pipeline_error
+        if demand_error:
+            payload["demand_error"] = demand_error
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
         payload["org_ldap"] = org or "ALL"
@@ -1262,8 +1428,20 @@ def get_user_projects(
     try:
         return fetch_projects_by_ldap(ldap, bq_client)
     except Exception as e:
+        # NOT `return []`. An empty list here is a valid answer - it means the
+        # person has no projects - so swallowing the exception made a broken
+        # query indistinguishable from an idle consultant, and nothing on
+        # screen said otherwise.
         logger.error(f"Failed to fetch projects for ldap {ldap}: {e}")
-        return []
+        if _is_auth_error(e):
+            raise HTTPException(
+                status_code=401,
+                detail="Your Google session is no longer valid. Sign in again.",
+            )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not load projects for {ldap}: {str(e)[:200]}",
+        )
 
 @router.get("/users/{ldap}/accounts")
 def get_user_accounts(
@@ -1274,8 +1452,18 @@ def get_user_accounts(
     try:
         return fetch_accounts_by_ldap(ldap, bq_client)
     except Exception as e:
+        # See get_user_projects: an empty list is a meaningful answer here, so
+        # it must never double as an error signal.
         logger.error(f"Failed to fetch accounts for ldap {ldap}: {e}")
-        return []
+        if _is_auth_error(e):
+            raise HTTPException(
+                status_code=401,
+                detail="Your Google session is no longer valid. Sign in again.",
+            )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not load accounts for {ldap}: {str(e)[:200]}",
+        )
 
 @router.post("/upload")
 async def upload_staffing_sheet(

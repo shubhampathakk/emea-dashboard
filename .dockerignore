@@ -10,3 +10,8 @@ backend/venv/
 *.bak
 frontend/*.bak
 node_modules/
+# 50 MB of unused JSON. Referenced by ZERO lines of code and shipped in every
+# image by `COPY backend/ .`.
+# NOT backend/data/ - that one IS read at runtime by get_fallback_payload()
+# (base_dir resolves to backend/, so it opens backend/data/emea_delivery.json).
+backend/src/data/
