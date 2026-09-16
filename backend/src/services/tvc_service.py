@@ -58,6 +58,13 @@ SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
 CACHE_TTL_SECONDS = int(os.getenv("TVC_CACHE_TTL", "600"))
 HTTP_TIMEOUT = 20
 
+# Only contractors whose Status says they are active are counted. The Sep 03 tab
+# uses exactly two values, "Active" and "Others"; compared casefolded so a later
+# "ACTIVE" or "active" still matches. Kept as a set because the sheet's owner is
+# free to introduce another affirmative value.
+ACTIVE_ONLY = os.getenv("TVC_ACTIVE_ONLY", "1").strip().lower() not in ("0", "false", "no")
+_ACTIVE_STATUSES = {"active"}
+
 # A project cell can name more than one project. The separator is a comma
 # surrounded by whitespace. Splitting on a bare "," is WRONG and was verified to
 # corrupt real project names that legitimately contain one:
@@ -245,7 +252,7 @@ def parse_tvc_rows(rows: List[List[str]]) -> Dict[str, Any]:
         return str(row[i] or "").strip()
 
     by_project: Dict[str, List[Dict[str, str]]] = {}
-    total = assigned = pairs = 0
+    total = assigned = pairs = skipped_inactive = 0
 
     for row in rows[1:]:
         if not any(str(c or "").strip() for c in row):
@@ -253,6 +260,18 @@ def parse_tvc_rows(rows: List[List[str]]) -> Dict[str, Any]:
         username = cell(row, "Username")
         if not username:
             continue
+
+        # Only ACTIVE contractors count. On the Sep 03 tab the Status column
+        # holds exactly two values, "Active" (44) and "Others" (14), and no
+        # non-Active row currently carries a project - so this changes no badge
+        # today. It is still the right filter: it stops an offboarded
+        # contractor being reported as staffed the moment the sheet's owner
+        # flips a status without clearing the Projects cell, and it makes the
+        # roster totals mean "active TVCs" rather than "rows on the tab".
+        if ACTIVE_ONLY and cell(row, "Status").casefold() not in _ACTIVE_STATUSES:
+            skipped_inactive += 1
+            continue
+
         total += 1
 
         raw_projects = cell(row, "Projects")
@@ -287,10 +306,16 @@ def parse_tvc_rows(rows: List[List[str]]) -> Dict[str, Any]:
 
     return {
         "by_project": by_project,
+        # Counts describe ACTIVE contractors only when ACTIVE_ONLY is on.
         "total_tvcs": total,
         "assigned_tvcs": assigned,
         "unassigned_tvcs": total - assigned,
         "pairs": pairs,
+        # Rows present on the tab but excluded by the status filter, so the
+        # figures can be reconciled against the sheet instead of appearing to
+        # have lost people.
+        "skipped_inactive": skipped_inactive,
+        "active_only": ACTIVE_ONLY,
     }
 
 

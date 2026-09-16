@@ -314,10 +314,14 @@ def _attach_tvc_assignments(
         "tab": index.get("tab"),
         "fetched_at": index.get("fetched_at"),
         "token_strategy": index.get("token_strategy"),
-        # Roster-wide totals, straight from the sheet.
+        # Roster-wide totals, straight from the sheet. ACTIVE contractors only.
         "total_tvcs": index.get("total_tvcs", 0),
         "assigned_tvcs": index.get("assigned_tvcs", 0),
         "unassigned_tvcs": index.get("unassigned_tvcs", 0),
+        # Rows on the tab excluded because their Status is not Active, so the
+        # numbers above can be reconciled against the sheet.
+        "active_only": index.get("active_only", True),
+        "skipped_inactive": index.get("skipped_inactive", 0),
         # How much of that roster actually landed on a project in THIS org. The
         # gap is expected: the sheet spans all of Core-EMEA, the portfolio is
         # one manager's org.
