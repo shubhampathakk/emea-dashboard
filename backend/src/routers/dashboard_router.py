@@ -92,48 +92,49 @@ def resolve_org_ldap(value: Optional[str]) -> Optional[str]:
 router = APIRouter(tags=["Dashboard"])
 
 # Standard billable capacity per week.
-# NOTE: no role in the source data is ever the bare string "Manager" - the
-# previous `role == "Manager"` checks therefore never matched and every manager
-# was measured against a 40h week.
 #
-# The reduced 16h capacity is for *people managers* who still carry billable
-# work. In this dataset that is "Manager (Billable CON/SCE)" (21 people).
-# It deliberately does NOT include job families that merely contain the word
-# manager - "Technical Account Manager" (133), "Technical Success Account
-# Manager" (10), "Cloud Program Manager" (7) - who are not reduced-capacity
-# people managers. Matching those would shrink the capacity denominator by
-# ~3,600 h/wk and materially overstate utilisation.
-MANAGER_WEEKLY_CAPACITY = 16.0
+# A FLAT 40h for everyone, by explicit product decision: "40 hours per week is
+# the 100% allocation for all the resources."
+#
+# This deliberately ignores the source's own `work_hours` column. That column
+# was used as the denominator until now, and it is NOT a contract - it is a
+# per-week availability figure that moves around for the same person. Jerome
+# Rajan, for example, runs 40 / 32 / 40 / 32 / 40 across consecutive weeks with
+# zero PTO and OOO = false. On the week it dips to 32 his unchanged 40h of
+# project work rendered as "125% over-allocated", which reads as a staffing
+# problem when it is only a short calendar week. Measured across this org on
+# 2026-09-13: 22 people were over 100% against that week's work_hours but only
+# 19 against their usual capacity, i.e. 3 were flagged purely by the calendar.
+#
+# Known inaccuracy accepted with this rule: one person (juditgabarro) is
+# genuinely contracted at 37.5h, so a full week for her now shows as 94%
+# rather than 100%. Everyone else in the org is a true 40h week.
+#
+# The old 16h people-manager capacity is also gone. It was already documented
+# as wrong: every "Manager (Billable CON/SCE)" here carries work_hours = 40 and
+# is scheduled ~39h of real delivery, so a 16h denominator turned a normal 20h
+# project into "100% allocated" and capped their visible load at 16h.
 STANDARD_WEEKLY_CAPACITY = 40.0
 
 
 def standard_capacity(role: Optional[str]) -> float:
-    """LAST-RESORT weekly capacity guess, used only when the source has no
-    work_hours for this person (i.e. no row in the anchor week).
+    """Weekly capacity. Flat 40h for every role - see the note above.
 
-    This used to be the primary rule and gave 16h to any role starting with
-    "manager". It was wrong. In this org every "Manager (Billable CON/SCE)"
-    has work_hours = 40 in the source and is scheduled ~39h of real delivery,
-    so the 16h denominator turned a normal 20h project into "100% allocated"
-    and capped their visible load at 16h. Prefer capacity_from_row().
+    Kept as a function rather than inlining the constant because it is called
+    from ~6 places; the role argument is retained so the signature does not
+    have to change at every call site.
     """
-    return MANAGER_WEEKLY_CAPACITY if str(role or "").strip().lower().startswith("manager") else STANDARD_WEEKLY_CAPACITY
+    return STANDARD_WEEKLY_CAPACITY
 
 
 def capacity_from_row(row: Dict[str, Any]) -> float:
-    """This person's real weekly capacity, from the source.
+    """Weekly capacity for allocation maths. Flat 40h.
 
-    work_hours is the contracted availability for the week (40, or 37.5 for
-    part-time). Falls back to the role guess only when it is missing, and
-    rejects absurd values so a data glitch cannot silently divide by ~0.
+    Previously returned the row's `work_hours`. It no longer does: that value
+    fluctuates week to week and made the allocation percentage a function of
+    the calendar rather than of staffing. See the note above STANDARD_WEEKLY_CAPACITY.
     """
-    try:
-        wh = float(row.get("work_hours") or 0)
-    except (ValueError, TypeError):
-        wh = 0.0
-    if 0 < wh <= 80:
-        return wh
-    return standard_capacity(row.get("role"))
+    return STANDARD_WEEKLY_CAPACITY
 
 
 def _demand_hub(role: str) -> str:

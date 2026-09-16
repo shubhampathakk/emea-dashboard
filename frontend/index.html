@@ -2646,10 +2646,14 @@
     //  * `new Date("YYYY-MM-DD")` parses as UTC but `parseDateUTC(s)`
     //    parses as local time, giving off-by-one day counts.
     // ---------------------------------------------------------------------
-    // A person's real weekly capacity comes from the source (work_hours on
-    // scheduled_vs_actual_utilization: 40, or 37.5 part-time) and is passed
-    // through by the backend as capacity_hours. The 40 below is only a
-    // last-resort default for a record that arrived without it.
+    // A week is 40h for everyone. The backend sends this through as
+    // capacity_hours on every resource, so this constant is only a last-resort
+    // default for a record that somehow arrived without it.
+    //
+    // capacity_hours used to carry the source's own per-week `work_hours`.
+    // That was dropped: work_hours is not a contract, it drifts 40/32/24 for
+    // the same person week to week, so a short calendar week made an unchanged
+    // 40h of project work render as "125% over-allocated".
     //
     // There used to be a rule here giving 16h to any role starting with
     // "manager". It was invented, not sourced, and it is why a "Manager
