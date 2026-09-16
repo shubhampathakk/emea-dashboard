@@ -53,15 +53,36 @@ import requests
 logger = logging.getLogger(__name__)
 
 SHEET_ID = os.getenv("TVC_SHEET_ID", "14yn3f2fK12yhQXdTVnd-cgtvAu5RJT4xv_pjMQFKHoY")
-SHEET_TAB = os.getenv("TVC_SHEET_TAB", "Sep 03")
+# Empty means "work out the newest dated tab on every refresh". Set
+# TVC_SHEET_TAB to pin one exact tab name and skip discovery entirely.
+SHEET_TAB = os.getenv("TVC_SHEET_TAB", "").strip()
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
 CACHE_TTL_SECONDS = int(os.getenv("TVC_CACHE_TTL", "600"))
 HTTP_TIMEOUT = 20
 
+# Tab naming. The sheet is re-cut roughly weekly under a new dated tab:
+# "Sep 03", then "Sep 16", and going forward "Base Data - Sep 16",
+# "Base Data - Sep 21", "Base Data - Oct 06". Both shapes are matched, the
+# prefixed form first, so the "Base Data - " series wins once it exists even
+# though older bare-dated tabs are still sitting in the workbook.
+#
+# The patterns are ANCHORED on purpose. The workbook is full of decoys that a
+# loose "contains a date" match would happily pick up and that have a totally
+# different shape: "Pivot Table - Sep 03", "TVCs on Bench - Sep 03",
+# "Assignment Details- Sep 03", "Working Sheet- Aug 21", "Copy of Aug 07",
+# "Data - Jul 23", "Aug 25 - AK Requirement".
+_TAB_PATTERNS = (
+    re.compile(r"^\s*base\s*data\s*[-\u2010-\u2015]\s*(?P<date>[a-z]{3,9}\.?\s+\d{1,2})\s*$", re.I),
+    re.compile(r"^\s*(?P<date>[a-z]{3,9}\.?\s+\d{1,2})\s*$", re.I),
+)
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun",
+     "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+
 # Only contractors whose Status says they are active are counted. The Sep 03 tab
-# uses exactly two values, "Active" and "Others"; compared casefolded so a later
-# "ACTIVE" or "active" still matches. Kept as a set because the sheet's owner is
-# free to introduce another affirmative value.
+# uses exactly two values, "Active" and "Others"; Sep 16 adds "Offboarding".
+# Compared casefolded so a later "ACTIVE" still matches. Kept as a set because
+# the sheet's owner is free to introduce another affirmative value.
 ACTIVE_ONLY = os.getenv("TVC_ACTIVE_ONLY", "1").strip().lower() not in ("0", "false", "no")
 _ACTIVE_STATUSES = {"active"}
 
@@ -207,11 +228,97 @@ def _a1_range(tab: str) -> str:
     return "'" + str(tab).replace("'", "''") + "'"
 
 
-def _fetch_rows(user_token: Optional[str] = None) -> List[List[str]]:
+def _parse_tab_date(text: str, today: Optional[datetime.date] = None) -> Optional[datetime.date]:
+    """Turn "Sep 16" / "Oct 06" / "September 6" into a real date.
+
+    The tab names carry no year. The year is inferred rather than assumed to be
+    the current one, otherwise the first "Jan 06" tab cut in the new year would
+    be read as eleven months in the PAST and the dashboard would silently keep
+    serving December's roster. Anything landing more than a quarter ahead is
+    treated as last year's tab instead.
+    """
+    today = today or datetime.date.today()
+    parts = str(text).replace(".", " ").split()
+    if len(parts) != 2:
+        return None
+    month = _MONTHS.get(parts[0][:3].lower())
+    if not month:
+        return None
+    try:
+        day = int(parts[1])
+    except ValueError:
+        return None
+    # Take the LATEST plausible year, not the first that parses. Returning the
+    # first would resolve a "Jan 06" tab read on 20 Dec to THIS January - 348
+    # days in the past - so it would lose to the incumbent "Dec 18" tab and the
+    # dashboard would serve December's roster for the whole of January.
+    candidates = []
+    for year in (today.year - 1, today.year, today.year + 1):
+        try:
+            candidate = datetime.date(year, month, day)
+        except ValueError:
+            continue  # 29 Feb on a non-leap year
+        if candidate - today <= datetime.timedelta(days=92):
+            candidates.append(candidate)
+    return max(candidates) if candidates else None
+
+
+def _pick_latest_tab(titles: List[str], today: Optional[datetime.date] = None) -> Optional[str]:
+    """Newest dated tab, preferring the "Base Data - " series.
+
+    Tiered rather than pooled: once the owner starts cutting "Base Data - ..."
+    tabs, those win even though older bare-dated tabs ("Sep 03") are still in
+    the workbook and could sort later on some future week.
+    """
+    for pattern in _TAB_PATTERNS:
+        dated = []
+        for title in titles:
+            m = pattern.match(title or "")
+            if not m:
+                continue
+            when = _parse_tab_date(m.group("date"), today)
+            if when:
+                dated.append((when, title))
+        if dated:
+            # Newest date wins; title as a stable tie-break.
+            return max(dated, key=lambda x: (x[0], x[1]))[1]
+    return None
+
+
+def _list_tabs(token: str) -> List[str]:
+    url = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
+        "?fields=sheets.properties.title"
+    )
+    resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=HTTP_TIMEOUT)
+    if not resp.ok:
+        raise RuntimeError(f"could not list tabs ({resp.status_code}): {resp.text[:200]}")
+    return [
+        (s.get("properties") or {}).get("title") or ""
+        for s in (resp.json().get("sheets") or [])
+    ]
+
+
+def _resolve_tab(token: str) -> str:
+    """Which tab to read: the pinned one, else the newest dated one."""
+    if SHEET_TAB:
+        return SHEET_TAB
+    titles = _list_tabs(token)
+    chosen = _pick_latest_tab(titles)
+    if not chosen:
+        raise RuntimeError(
+            "no dated tab found. Expected something like 'Base Data - Sep 16'. "
+            "Tabs present: " + ", ".join(t for t in titles if t)[:300]
+        )
+    return chosen
+
+
+def _fetch_rows(user_token: Optional[str] = None) -> Tuple[List[List[str]], str]:
     token, strategy = _sheets_token(user_token)
+    tab = _resolve_tab(token)
     url = (
         f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/"
-        f"{urllib.parse.quote(_a1_range(SHEET_TAB))}?majorDimension=ROWS"
+        f"{urllib.parse.quote(_a1_range(tab))}?majorDimension=ROWS"
     )
     resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=HTTP_TIMEOUT)
     if resp.status_code in (401, 403):
@@ -223,13 +330,15 @@ def _fetch_rows(user_token: Optional[str] = None) -> List[List[str]]:
         )
     if resp.status_code == 400:
         raise RuntimeError(
-            f"Sheets rejected the range for tab '{SHEET_TAB}'. Detail: {resp.text[:200]}"
+            f"Sheets rejected the range for tab '{tab}'. Detail: {resp.text[:200]}"
         )
     if resp.status_code == 404:
         raise RuntimeError(f"spreadsheet {SHEET_ID} not found or not visible")
     if not resp.ok:
         raise RuntimeError(f"Sheets API {resp.status_code}: {resp.text[:240]}")
-    return resp.json().get("values", []) or []
+    # The tab travels back with the rows so callers can surface WHICH week's tab
+    # was actually read - with auto-discovery that is no longer a constant.
+    return (resp.json().get("values", []) or [], tab)
 
 
 def parse_tvc_rows(rows: List[List[str]]) -> Dict[str, Any]:
@@ -240,10 +349,28 @@ def parse_tvc_rows(rows: List[List[str]]) -> Dict[str, Any]:
     """
     if not rows:
         return {"by_project": {}, "total_tvcs": 0, "assigned_tvcs": 0,
-                "unassigned_tvcs": 0, "pairs": 0}
+                "unassigned_tvcs": 0, "pairs": 0, "skipped_inactive": 0,
+                "active_only": ACTIVE_ONLY}
 
     header = [str(h or "").strip() for h in rows[0]]
-    idx = {h: i for i, h in enumerate(header) if h}
+
+    # FIRST occurrence wins. This is load-bearing, not defensive tidying: from
+    # the "Sep 16" tab onwards the sheet appends a per-assignment block that
+    # reintroduces a column literally called "Status" (values Ongoing/blank)
+    # after the TVC-level "Status" (values Active/Others/Offboarding). A plain
+    # {h: i for ...} keeps the LAST, so the Active filter would have matched
+    # zero rows and every TVC badge would have quietly disappeared.
+    idx: Dict[str, int] = {}
+    for i, h in enumerate(header):
+        if h and h not in idx:
+            idx[h] = i
+
+    missing = [c for c in ("Username", "Projects", "Status") if c not in idx]
+    if missing:
+        raise RuntimeError(
+            "TVC sheet is missing expected column(s): %s. Found: %s"
+            % (", ".join(missing), ", ".join(h for h in header if h)[:300])
+        )
 
     def cell(row: List[str], col: str) -> str:
         i = idx.get(col)
@@ -335,12 +462,13 @@ def get_tvc_index(force: bool = False, user_token: Optional[str] = None) -> Dict
             return cached
 
     try:
-        parsed = parse_tvc_rows(_fetch_rows(user_token))
+        rows, tab = _fetch_rows(user_token)
+        parsed = parse_tvc_rows(rows)
         payload = dict(
             parsed,
             ok=True,
             error=None,
-            tab=SHEET_TAB,
+            tab=tab,
             sheet_id=SHEET_ID,
             token_strategy=_token_strategy,
             fetched_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -350,7 +478,7 @@ def get_tvc_index(force: bool = False, user_token: Optional[str] = None) -> Dict
             _cache["fetched_at"] = now
         logger.info(
             "TVC sheet '%s' loaded: %d TVCs, %d assigned, %d projects (%s)",
-            SHEET_TAB, payload["total_tvcs"], payload["assigned_tvcs"],
+            tab, payload["total_tvcs"], payload["assigned_tvcs"],
             len(payload["by_project"]), _token_strategy,
         )
         return payload
@@ -362,7 +490,8 @@ def get_tvc_index(force: bool = False, user_token: Optional[str] = None) -> Dict
             # Better a slightly old roster, clearly labelled, than a silent zero.
             return dict(stale, ok=False, error=str(exc), is_stale=True)
         return {
-            "ok": False, "error": str(exc), "is_stale": False, "tab": SHEET_TAB,
+            "ok": False, "error": str(exc), "is_stale": False,
+            "tab": SHEET_TAB or "(auto)",
             "sheet_id": SHEET_ID, "by_project": {}, "total_tvcs": 0,
             "assigned_tvcs": 0, "unassigned_tvcs": 0, "pairs": 0,
             "token_strategy": _token_strategy, "fetched_at": None,

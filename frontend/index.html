@@ -4829,6 +4829,19 @@
         tvcBanner = `<div style="grid-column:1/-1" class="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl px-3 py-2">
             <strong class="font-bold">Showing the last good TVC roster.</strong>
             The live refresh failed, so these counts may be out of date.
+            ${tvcTab ? `Tab \u201c${tvcEsc(tvcTab)}\u201d.` : ""}
+          </div>`;
+      } else if (tvcAvailable && tvcTab) {
+        // The tab is chosen automatically each refresh (newest dated tab in the
+        // workbook). Naming it here is the only way to tell a correctly-rolling
+        // sheet from one that has quietly stuck on an old week - the counts
+        // alone look perfectly healthy either way.
+        const tvcLink = tvcMeta.sheet_url
+          ? `<a href="${tvcEsc(tvcMeta.sheet_url)}" target="_blank" rel="noopener" class="underline decoration-dotted hover:text-teal-700">Core EMEA Active TVCs</a>`
+          : "Core EMEA Active TVCs";
+        tvcBanner = `<div style="grid-column:1/-1" class="text-[11px] text-slate-500 px-1 -mb-1">
+            TVC coverage from ${tvcLink}, tab <strong class="font-semibold text-slate-600">${tvcEsc(tvcTab)}</strong>
+            &middot; ${tvcMeta.matched_tvcs || 0} of ${tvcMeta.total_tvcs || 0} active contractors matched to ${tvcMeta.matched_projects || 0} project${(tvcMeta.matched_projects === 1) ? "" : "s"} below.
           </div>`;
       }
       container.innerHTML = tvcBanner;
