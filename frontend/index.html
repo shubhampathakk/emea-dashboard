@@ -578,14 +578,14 @@
                    list above either way. -->
               <div class="px-3 py-2 border-t border-[#2a2356] bg-[#181234]">
                 <label class="flex items-start gap-2.5 cursor-pointer group"
-                       title="Hides people whose role is Manager (Billable CON/SCE) from every tab's tables, charts and KPIs.">
-                  <input type="checkbox" id="toggle-exclude-managers"
-                         onchange="onToggleExcludeManagers(this.checked)"
+                       title="Managers (role Manager (Billable CON/SCE)) are left out of every tab's tables, charts and KPIs unless this is ticked.">
+                  <input type="checkbox" id="toggle-show-managers"
+                         onchange="onToggleShowManagers(this.checked)"
                          class="mt-0.5 w-3.5 h-3.5 rounded accent-[#915EFF] cursor-pointer shrink-0">
                   <span class="min-w-0">
-                    <span class="block text-[11.5px] font-semibold text-[#e2e8f0] group-hover:text-white">Hide managers from the tabs</span>
-                    <span class="block text-[10px] text-[#8b84b8] mt-0.5">Leaves them selectable above, but drops them from every tab's figures. Applies instantly.</span>
-                    <span id="exclude-managers-hint" class="block text-[10px] text-[#c4b5fd] mt-0.5"></span>
+                    <span class="block text-[11.5px] font-semibold text-[#e2e8f0] group-hover:text-white">Show managers on the tabs</span>
+                    <span class="block text-[10px] text-[#8b84b8] mt-0.5">Managers are left out of every tab's figures by default. They stay selectable above. Applies instantly.</span>
+                    <span id="manager-visibility-hint" class="block text-[10px] text-[#c4b5fd] mt-0.5"></span>
                   </span>
                 </label>
               </div>
@@ -2326,12 +2326,13 @@
     // MANAGER VISIBILITY (display-only)
     // ---------------------------------------------------------------------
     // People managers carry a billable target but are not staffed like ICs, so
-    // their utilisation and allocation distort every roll-up. This hides them
-    // from the tabs WITHOUT changing what the backend returns - they stay in
-    // the org-scope list, and picking one still works.
+    // their utilisation and allocation distort every roll-up. They are hidden
+    // from the tabs by default WITHOUT changing what the backend returns - they
+    // stay in the org-scope list, and picking one as a scope still works.
     //
-    // Default OFF: unticked means the dashboard behaves exactly as before, so
-    // nobody's numbers move without them asking.
+    // The control is phrased "Show managers", not "Hide managers", so that the
+    // box is UNTICKED by default and managers are HIDDEN by default - both were
+    // asked for, and only this polarity gives you both.
     //
     // "Manager" is `role` STARTING WITH "manager", which in this data means
     // "Manager (Billable CON/SCE)" - 6 of the 65 people in the default org, and
@@ -2343,9 +2344,14 @@
     // Role-based rather than "has direct reports" on purpose - the latter
     // shrinks as you scope into a sub-org, so the same person would be a
     // manager on one scope and an IC on another.
-    let excludeManagers = false;
+    let showManagers = false;
     try {
-      excludeManagers = localStorage.getItem("excludeManagers") === "1";
+      showManagers = localStorage.getItem("showManagers") === "1";
+      // An earlier build stored the opposite question under "excludeManagers".
+      // Drop it rather than translate it: its default meant "managers visible",
+      // which is no longer the intended default, so honouring a stale value
+      // would silently opt some browsers out of the new behaviour.
+      localStorage.removeItem("excludeManagers");
     } catch (e) { /* private browsing - fall back to the default */ }
 
     // Pristine copies of the payload, as JSON, taken once per load. Filtering
@@ -2384,7 +2390,7 @@
         return 0;
       }
 
-      if (!excludeManagers) {
+      if (showManagers) {
         globalData.resources = resources;
         globalData.customerPortfolio = portfolio;
         return 0;
@@ -2437,28 +2443,28 @@
       return hidden;
     }
 
-    function updateExcludeManagersUI(hiddenCount) {
-      const cb = document.getElementById("toggle-exclude-managers");
-      if (cb) cb.checked = excludeManagers;
-      const hint = document.getElementById("exclude-managers-hint");
+    function updateManagerVisibilityUI(hiddenCount) {
+      const cb = document.getElementById("toggle-show-managers");
+      if (cb) cb.checked = showManagers;
+      const hint = document.getElementById("manager-visibility-hint");
       if (hint) {
-        hint.textContent = excludeManagers
-          ? `${hiddenCount} manager${hiddenCount === 1 ? "" : "s"} hidden from all tabs.`
-          : "";
+        hint.textContent = showManagers
+          ? ""
+          : `${hiddenCount} manager${hiddenCount === 1 ? "" : "s"} hidden from all tabs.`;
       }
     }
 
     // Re-renders every tab from the already-loaded payload. No refetch: this is
     // purely a view filter, and a network round-trip would make a checkbox feel
     // like a scope change.
-    function onToggleExcludeManagers(checked) {
-      excludeManagers = !!checked;
+    function onToggleShowManagers(checked) {
+      showManagers = !!checked;
       try {
-        localStorage.setItem("excludeManagers", excludeManagers ? "1" : "0");
+        localStorage.setItem("showManagers", showManagers ? "1" : "0");
       } catch (e) { /* non-fatal */ }
 
       const hidden = applyManagerVisibility();
-      updateExcludeManagersUI(hidden);
+      updateManagerVisibilityUI(hidden);
 
       try {
         updateDashboardKPIs();
@@ -2474,14 +2480,14 @@
 
       if (typeof showToast === "function") {
         showToast(
-          excludeManagers
-            ? `Managers hidden from all tabs (${hidden} ${hidden === 1 ? "person" : "people"}).`
-            : "Managers shown again on all tabs.",
+          showManagers
+            ? "Managers shown again on all tabs."
+            : `Managers hidden from all tabs (${hidden} ${hidden === 1 ? "person" : "people"}).`,
           "success"
         );
       }
     }
-    window.onToggleExcludeManagers = onToggleExcludeManagers;
+    window.onToggleShowManagers = onToggleShowManagers;
 
     const VALID_TABS = ["exec", "board", "roster", "portfolio", "timeline", "matrix", "gtm"];
     const initialHash = (window.location.hash || "").replace("#", "").toLowerCase();
@@ -3531,7 +3537,7 @@
         // change re-applies the checkbox without briefly painting the
         // unfiltered figures.
         snapshotForManagerFilter();
-        updateExcludeManagersUI(applyManagerVisibility());
+        updateManagerVisibilityUI(applyManagerVisibility());
 
         populateManagerFilter();
         updateDashboardKPIs();
