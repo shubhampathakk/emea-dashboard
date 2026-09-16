@@ -94,6 +94,27 @@ def require_bq_client(
     user_credentials = Credentials(token=token, scopes=[BIGQUERY_SCOPE])
     return bigquery.Client(project=PROJECT_ID, credentials=user_credentials)
 
+
+def get_user_token(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_user_oauth_token: Optional[str] = Header(None, alias="X-User-OAuth-Token"),
+    x_google_oauth_token: Optional[str] = Header(None, alias="X-Google-OAuth-Token"),
+) -> Optional[str]:
+    """The caller's raw OAuth access token, or None.
+
+    Needed because the TVC sheet is read as the signed-in user rather than as
+    the runtime service account: corp Drive will not share a google.com
+    document with an external @developer.gserviceaccount.com identity. The
+    token already carries the Sheets scope (the frontend requests it alongside
+    BigQuery), so it can be forwarded straight to the Sheets API.
+
+    Returning None rather than raising keeps this usable on routes that
+    tolerate anonymous callers; the TVC fetch simply reports unavailable.
+    """
+    return _extract_user_token(request, authorization, x_user_oauth_token, x_google_oauth_token)
+
+
 # LDAPs explicitly excluded from the roster at the request of the org owner.
 # All six are real, CC1, and inside the default org, so no scope predicate would
 # drop them - the exclusion has to be deliberate. Applied to the roster query AND

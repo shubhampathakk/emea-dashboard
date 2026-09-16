@@ -156,9 +156,20 @@ def _token_via_self_impersonation() -> Optional[str]:
     return resp.json().get("accessToken")
 
 
-def _sheets_token() -> Tuple[str, str]:
-    """Returns (token, strategy_name). Prefers whatever worked last time."""
+def _sheets_token(user_token: Optional[str] = None) -> Tuple[str, str]:
+    """Returns (token, strategy_name).
+
+    The caller's own OAuth token wins when present. Corp Drive will not
+    share a google.com document with the runtime service account - Drive
+    answers 404, i.e. no ACL entry at all - so the service-account paths
+    below only work for a sheet that has genuinely been shared with it.
+    They are kept as a fallback rather than removed, so that pointing
+    TVC_SHEET_ID at a service-account-owned sheet keeps working.
+    """
     global _token_strategy
+
+    if user_token:
+        return user_token, "user"
 
     strategies = [("adc", _token_via_adc), ("impersonation", _token_via_self_impersonation)]
     if _token_strategy == "impersonation":
@@ -179,21 +190,36 @@ def _sheets_token() -> Tuple[str, str]:
 # --------------------------------------------------------------------------
 # fetch + parse
 # --------------------------------------------------------------------------
-def _fetch_rows() -> List[List[str]]:
-    token, strategy = _sheets_token()
+def _a1_range(tab: str) -> str:
+    """A1 notation for a whole sheet.
+
+    A bare tab name is only valid A1 when it has no spaces; "Sep 03" must be
+    written 'Sep 03'. An apostrophe inside the name is escaped by doubling it,
+    per the A1 spec - relevant the day someone names a tab "Dave's copy".
+    """
+    return "'" + str(tab).replace("'", "''") + "'"
+
+
+def _fetch_rows(user_token: Optional[str] = None) -> List[List[str]]:
+    token, strategy = _sheets_token(user_token)
     url = (
         f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/"
-        f"{urllib.parse.quote(SHEET_TAB)}?majorDimension=ROWS"
+        f"{urllib.parse.quote(_a1_range(SHEET_TAB))}?majorDimension=ROWS"
     )
     resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=HTTP_TIMEOUT)
-    if resp.status_code == 403:
+    if resp.status_code in (401, 403):
         raise RuntimeError(
-            "403 from Sheets. Either the sheet is not shared with the runtime "
-            "service account, or the token lacks the spreadsheets scope "
-            f"(strategy={strategy}). Detail: {resp.text[:240]}"
+            f"Sheets returned {resp.status_code} (credential={strategy}). Either the "
+            "signed-in user cannot open the sheet, or their token predates the "
+            "spreadsheets.readonly scope being added - signing out and back in "
+            f"re-mints it. Detail: {resp.text[:200]}"
+        )
+    if resp.status_code == 400:
+        raise RuntimeError(
+            f"Sheets rejected the range for tab '{SHEET_TAB}'. Detail: {resp.text[:200]}"
         )
     if resp.status_code == 404:
-        raise RuntimeError(f"tab '{SHEET_TAB}' not found in spreadsheet {SHEET_ID}")
+        raise RuntimeError(f"spreadsheet {SHEET_ID} not found or not visible")
     if not resp.ok:
         raise RuntimeError(f"Sheets API {resp.status_code}: {resp.text[:240]}")
     return resp.json().get("values", []) or []
@@ -268,8 +294,14 @@ def parse_tvc_rows(rows: List[List[str]]) -> Dict[str, Any]:
     }
 
 
-def get_tvc_index(force: bool = False) -> Dict[str, Any]:
-    """Cached TVC index. Never raises."""
+def get_tvc_index(force: bool = False, user_token: Optional[str] = None) -> Dict[str, Any]:
+    """Cached TVC index. Never raises.
+
+    The cache is process-wide and NOT per-user. That is deliberate: the sheet is
+    a single shared operational roster, identical for every viewer, and anyone
+    who can load this dashboard already sees the full staffing roster. Caching
+    per token would multiply sheet reads by the number of viewers for no gain.
+    """
     now = time.time()
     with _lock:
         cached = _cache.get("payload")
@@ -278,7 +310,7 @@ def get_tvc_index(force: bool = False) -> Dict[str, Any]:
             return cached
 
     try:
-        parsed = parse_tvc_rows(_fetch_rows())
+        parsed = parse_tvc_rows(_fetch_rows(user_token))
         payload = dict(
             parsed,
             ok=True,

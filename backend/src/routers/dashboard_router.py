@@ -15,6 +15,7 @@ from src.services.tvc_service import (
     lookup_project as lookup_tvc_project,
 )
 from src.services.bigquery_service import (
+    get_user_token,
     get_bq_client, 
     require_bq_client,
     query_emea_delivery_data, 
@@ -260,7 +261,10 @@ def _build_resource_demand(demand_rows: Optional[List[Dict[str, Any]]]) -> Dict[
 _TVC_DISPLAY_FIELDS = ("username", "partner", "level", "role", "sub_practice", "google_poc")
 
 
-def _attach_tvc_assignments(customers_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _attach_tvc_assignments(
+    customers_list: List[Dict[str, Any]],
+    user_token: Optional[str] = None,
+) -> Dict[str, Any]:
     """Hang the live TVC roster off each portfolio project, in place.
 
     Matching is by project NAME because the sheet is maintained by hand and has
@@ -274,7 +278,7 @@ def _attach_tvc_assignments(customers_list: List[Dict[str, Any]]) -> Dict[str, A
     must not let 0 masquerade as "no contractors", so the returned summary
     carries `available` and the UI suppresses the badge entirely.
     """
-    index = get_tvc_index()
+    index = get_tvc_index(user_token=user_token)
     available = bool(index.get("ok")) or bool(index.get("is_stale"))
 
     matched_projects = 0
@@ -330,6 +334,7 @@ def build_dashboard_payload(
     delivery_rows: List[Dict[str, Any]],
     pipeline_rows: List[Dict[str, Any]],
     demand_rows: Optional[List[Dict[str, Any]]] = None,
+    user_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Transforms delivery and pipeline records into the full frontend dashboard state."""
     resource_map: Dict[str, Dict[str, Any]] = {}
@@ -992,7 +997,7 @@ def build_dashboard_payload(
 
     # Live TVC roster from the Core EMEA Active TVCs sheet. Cached and
     # non-fatal: a sheet outage degrades the badge, never the dashboard.
-    tvc_summary = _attach_tvc_assignments(customers_list)
+    tvc_summary = _attach_tvc_assignments(customers_list, user_token=user_token)
 
     # Never invent revenue. If there is no booked value in the period, say so
     # rather than displaying a fraction of pipeline as though it were real.
@@ -1123,6 +1128,8 @@ def get_dashboard_data(
     org_ldap: Optional[str] = Query(None),
     # Strict: an anonymous caller gets 401, never the cached snapshot.
     bq_client: bigquery.Client = Depends(require_bq_client),
+    # Same token, forwarded to the Sheets API for the TVC roster.
+    user_token: Optional[str] = Depends(get_user_token),
 ):
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
@@ -1136,7 +1143,9 @@ def get_dashboard_data(
         # Forward staffing asks for pipeline deals. Independent of the close-date
         # window above: a request's weeks are its own delivery window.
         demand_rows = query_pipeline_resource_demand(bq_client)
-        payload = build_dashboard_payload(delivery_rows, pipeline_rows, demand_rows)
+        payload = build_dashboard_payload(
+            delivery_rows, pipeline_rows, demand_rows, user_token=user_token
+        )
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
         payload["org_ldap"] = org or "ALL"
@@ -1204,6 +1213,8 @@ def refresh_bq(
     org_ldap: Optional[str] = Query(None),
     # Strict: returns the same full payload as /data, so it needs the same gate.
     bq_client: bigquery.Client = Depends(require_bq_client),
+    # Same token, forwarded to the Sheets API for the TVC roster.
+    user_token: Optional[str] = Depends(get_user_token),
 ):
     clean_start = str(start_date).strip() if (start_date and str(start_date).strip()) else None
     clean_end = str(end_date).strip() if (end_date and str(end_date).strip()) else None
@@ -1214,7 +1225,9 @@ def refresh_bq(
         # Forward staffing asks for pipeline deals. Independent of the close-date
         # window above: a request's weeks are its own delivery window.
         demand_rows = query_pipeline_resource_demand(bq_client)
-        payload = build_dashboard_payload(delivery_rows, pipeline_rows, demand_rows)
+        payload = build_dashboard_payload(
+            delivery_rows, pipeline_rows, demand_rows, user_token=user_token
+        )
         payload["data_source"] = "bigquery"
         payload["is_stale"] = False
         payload["org_ldap"] = org or "ALL"

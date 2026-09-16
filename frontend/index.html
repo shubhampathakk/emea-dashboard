@@ -7703,6 +7703,11 @@ Thank you!
   const auth = getAuth(app);
   const provider = new GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/bigquery');
+  // Needed to read the Core EMEA Active TVCs sheet as the signed-in user.
+  // Corp Drive refuses to share the sheet with the runtime service account
+  // (it is an external @developer.gserviceaccount.com identity), so the
+  // backend reads it with the caller's token instead.
+  provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
   provider.setCustomParameters({ prompt: 'select_account' });
 
   function hideLoginOverlay() {
@@ -7796,6 +7801,10 @@ Thank you!
   // ---------------------------------------------------------------------
   const OAUTH_CLIENT_ID = "673796126218-a7bvrq0ahrjkrkl8p2n34eirrk07t8sc.apps.googleusercontent.com";
   const BQ_SCOPE = "https://www.googleapis.com/auth/bigquery";
+  // Same token is reused server-side to read the TVC sheet, so it must
+  // carry the Sheets scope too. Space-separated, per the GIS contract.
+  const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+  const OAUTH_SCOPES = BQ_SCOPE + " " + SHEETS_SCOPE;
   // Renew this far ahead of expiry so a long-open tab never goes stale.
   const REFRESH_LEAD_MS = 5 * 60 * 1000;
 
@@ -7819,7 +7828,7 @@ Thank you!
     if (!(await gisReady())) return null;
     tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: OAUTH_CLIENT_ID,
-      scope: BQ_SCOPE,
+      scope: OAUTH_SCOPES,
       // 'none' = attempt silently and fail with login_required/consent_required.
       // An empty string means "use the default", which opens a popup - and a
       // popup outside a user gesture is blocked by the browser.
