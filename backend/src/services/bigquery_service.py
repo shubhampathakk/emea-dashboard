@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import re
 from typing import Optional, Dict, Any, List
 from fastapi import Header, HTTPException, Request
 from google.cloud import bigquery
@@ -131,11 +132,23 @@ EXCLUDED_LDAPS = (
 
 # Matches how ldap is normalised everywhere else here: the source column is
 # sometimes a bare ldap and sometimes an email address.
-EXCLUDED_LDAP_SQL = (
-    "LOWER(COALESCE(SPLIT(ldap, '@')[OFFSET(0)], ldap)) NOT IN ("
-    + ", ".join("'%s'" % l for l in EXCLUDED_LDAPS)
-    + ")"
-)
+def excluded_ldap_sql(expr: str = "ldap") -> str:
+    """`NOT IN` predicate for the exclusion list, against any ldap-ish column.
+
+    Parameterised by column because the manager dropdown has to apply the same
+    list twice: once to the PERSON being counted (`ldap`) and once to the
+    MANAGER being offered as a scope (`mgr_ldap`). Filtering only the person
+    side still leaves an excluded manager in the dropdown, because they appear
+    in other people's hierarchy chains.
+    """
+    return (
+        "LOWER(COALESCE(SPLIT({e}, '@')[OFFSET(0)], {e})) NOT IN ({vals})".format(
+            e=expr, vals=", ".join("'%s'" % l for l in EXCLUDED_LDAPS)
+        )
+    )
+
+
+EXCLUDED_LDAP_SQL = excluded_ldap_sql("ldap")
 
 
 def query_emea_delivery_data(
@@ -669,6 +682,11 @@ def query_org_options(
       SELECT DISTINCT resource_id, mgr_ldap
       FROM chains
       WHERE root_off IS NOT NULL AND off <= root_off
+        -- Excluded people must not be offered as an org to scope BY either.
+        -- The filter in `latest` only stops them being counted as someone's
+        -- report; they still show up inside other people's hierarchy chains,
+        -- which is how ptokarski was still appearing in the dropdown.
+        AND __MGR_EXCLUSIONS__
     ),
     people AS (
       SELECT
@@ -689,6 +707,21 @@ def query_org_options(
     HAVING headcount >= @min_headcount
     ORDER BY headcount DESC
     """
+    # MUST happen before the query runs. This was missing: the SQL above
+    # carries the literal token `__LDAP_EXCLUSIONS__`, so BigQuery rejected
+    # every call with "Unrecognized name", get_org_options() swallowed it and
+    # returned its single-entry fallback - which looked exactly like "the org
+    # only has one manager" rather than like a failure.
+    query = query.replace("__LDAP_EXCLUSIONS__", EXCLUDED_LDAP_SQL)
+    query = query.replace("__MGR_EXCLUSIONS__", excluded_ldap_sql("mgr_ldap"))
+    # Fail loudly rather than repeat the above. An unsubstituted token is a
+    # programming error, and the caller's except-clause would otherwise turn it
+    # back into a plausible-looking one-manager dropdown.
+    if "__" in query and re.search(r"__[A-Z_]+__", query):
+        raise RuntimeError(
+            "org-options SQL still contains an unsubstituted placeholder: %s"
+            % ", ".join(sorted(set(re.findall(r"__[A-Z_]+__", query))))
+        )
     root = (root_ldap or "").strip().lower()
     job_config = bigquery.QueryJobConfig(
         query_parameters=[

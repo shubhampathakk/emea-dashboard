@@ -3159,10 +3159,12 @@
       const useBootLoader = (!hasLoadedOnce || forceBootNext);
       forceBootNext = false;
       if (useBootLoader) {
-        const orgLabel = (typeof orgScopeLabelText === "function")
-          ? orgScopeLabelText(orgScopeAsArray(getOrgScope()))
-          : "";
-        showBootLoader(orgLabel ? `Loading ${orgLabel}` : "Connecting to BigQuery");
+        // Just "Loading". This used to interpolate the org scope label, but at
+        // boot the friendly name has not arrived yet (it comes with the
+        // /org-options fetch), so it rendered the raw ldap - "Loading
+        // guptaashutosh". The four step rows below already say what is
+        // happening, and the org is shown in the header once loaded.
+        showBootLoader("Loading");
       } else {
         showFilterLoader(
           syncBq ? "Syncing BigQuery" : "Updating dashboard",
