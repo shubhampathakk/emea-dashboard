@@ -2869,6 +2869,47 @@
       return Math.max(0, Math.round((weeklyHours / cap) * 100));
     }
 
+    // ---- Person photos -------------------------------------------------
+    // IMPORTANT: this URL is fetched by the VIEWER'S BROWSER, never by the
+    // server. Cloud Run is not involved and could not help if it were - the
+    // host sits behind uberproxy (it 302s to login.corp.google.com at
+    // authLevel 1500), and the runtime service account has no way to satisfy
+    // that. Exactly the same wall we hit trying to read the TVC sheet
+    // server-side. So there is no backend proxy fallback to build here.
+    //
+    // Whether a photo appears therefore comes down to one thing: does the
+    // viewer's browser attach its corp SSO cookies to a cross-site image
+    // request from a *.run.app page? If yes, the photo renders. If the
+    // cookies are SameSite-restricted, the request lands on the login
+    // redirect, the image fails to decode, and we silently keep the initials.
+    //
+    // Hence the design below: the initials circle stays exactly as it is and
+    // the photo is layered ON TOP, hidden until it successfully loads. A
+    // failure is invisible - no broken-image icon, no empty circle, no
+    // layout shift. Worst case the dashboard looks precisely like it does
+    // today.
+    const PERSON_PHOTO_BASE = "https://moma-teams-photos.corp.google.com/photos/";
+
+    function personPhotoOverlay(ldap) {
+      const clean = String(ldap || "").trim().toLowerCase();
+      // Guard the URL: ldap values reach us from BigQuery and occasionally
+      // arrive as full emails or with stray characters.
+      if (!clean || !/^[a-z0-9._-]+$/.test(clean)) return "";
+      return `<img src="${PERSON_PHOTO_BASE}${encodeURIComponent(clean)}@google.com"` +
+        ` alt="" aria-hidden="true" loading="lazy" referrerpolicy="no-referrer"` +
+        ` class="absolute inset-0 w-full h-full object-cover"` +
+        ` style="display:none"` +
+        ` onload="this.style.display='block'"` +
+        ` onerror="this.remove()">`;
+    }
+
+    // Drop-in replacement for the bare initial inside an avatar circle. The
+    // container must carry `relative overflow-hidden` so the photo clips to
+    // the existing rounded shape.
+    function avatarInner(ldap, initial) {
+      return `${initial}${personPhotoOverlay(ldap)}`;
+    }
+
     // Width for a progress bar, which physically cannot exceed its track.
     function clampBar(pct) {
       return Math.max(0, Math.min(100, Number(pct) || 0));
@@ -3712,8 +3753,8 @@
         container.innerHTML += `
           <div class="bg-white/95 border border-slate-200/80 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 hover:border-blue-300 hover:shadow-xs transition duration-150">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200/70 text-blue-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
-                ${initial}
+              <div class="relative overflow-hidden w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200/70 text-blue-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                ${avatarInner(item.ldap, initial)}
               </div>
               <div class="min-w-0">
                 <div class="font-bold text-xs text-slate-900 truncate">${item.name} <span class="text-slate-400 font-mono font-normal">@${item.ldap}</span></div>
@@ -4378,8 +4419,8 @@
             <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col gap-3 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div class="flex justify-between items-start">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 font-bold flex items-center justify-center text-xs shrink-0">
-                    ${initial}
+                  <div class="relative overflow-hidden w-8 h-8 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 font-bold flex items-center justify-center text-xs shrink-0">
+                    ${avatarInner(r.ldap, initial)}
                   </div>
                   <div>
                     <div class="font-bold text-xs text-slate-900">${r.name}</div>
@@ -4408,8 +4449,8 @@
             <div class="bg-white rounded-2xl border border-amber-300/90 bg-gradient-to-b from-amber-500/[0.04] to-white p-4 shadow-2xs flex flex-col gap-3 hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div class="flex justify-between items-start">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 font-bold flex items-center justify-center text-xs shrink-0">
-                    ${initial}
+                  <div class="relative overflow-hidden w-8 h-8 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 font-bold flex items-center justify-center text-xs shrink-0">
+                    ${avatarInner(r.ldap, initial)}
                   </div>
                   <div>
                     <div class="font-bold text-xs text-slate-900">${r.name}</div>
@@ -4435,8 +4476,8 @@
             <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col gap-3 hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div class="flex justify-between items-start">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold flex items-center justify-center text-xs shrink-0">
-                    ${initial}
+                  <div class="relative overflow-hidden w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold flex items-center justify-center text-xs shrink-0">
+                    ${avatarInner(r.ldap, initial)}
                   </div>
                   <div>
                     <div class="font-bold text-xs text-slate-900">${r.name}</div>
@@ -4461,8 +4502,8 @@
             <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col gap-3 hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div class="flex justify-between items-start">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold flex items-center justify-center text-xs shrink-0">
-                    ${initial}
+                  <div class="relative overflow-hidden w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold flex items-center justify-center text-xs shrink-0">
+                    ${avatarInner(r.ldap, initial)}
                   </div>
                   <div>
                     <div class="font-bold text-xs text-slate-900">${r.name}</div>
@@ -4828,8 +4869,8 @@
           const identityCell = (chevron, badgeHtml) => `
                 <div class="flex items-center gap-2.5">
                   ${chevron}
-                  <div class="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700 border border-indigo-150 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                    ${rName.charAt(0).toUpperCase()}
+                  <div class="relative overflow-hidden w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700 border border-indigo-150 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                    ${avatarInner(rLdap, rName.charAt(0).toUpperCase())}
                   </div>
                   <div>
                     <div class="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">${rName}</div>
@@ -5633,8 +5674,8 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-1">
               <div class="flex flex-wrap items-center gap-2.5">
                 <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700 border border-indigo-150 flex items-center justify-center text-xs font-bold shrink-0">
-                    ${(r.name || 'U').charAt(0).toUpperCase()}
+                  <div class="relative overflow-hidden w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700 border border-indigo-150 flex items-center justify-center text-xs font-bold shrink-0">
+                    ${avatarInner(r.ldap, (r.name || 'U').charAt(0).toUpperCase())}
                   </div>
                   <div>
                     <span class="font-bold text-sm text-slate-900">${r.name}</span>
@@ -5994,8 +6035,8 @@
           <div class="glass-card bg-white/95 border border-slate-200/80 hover:border-blue-300 rounded-2xl p-4 flex flex-col gap-3 shadow-2xs hover:shadow-xs transition duration-200 group">
             <div class="flex justify-between items-start gap-2">
               <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-50 to-rose-100 border border-rose-200 text-rose-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
-                  ${initial}
+                <div class="relative overflow-hidden w-9 h-9 rounded-xl bg-gradient-to-br from-rose-50 to-rose-100 border border-rose-200 text-rose-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                  ${avatarInner(r.ldap, initial)}
                 </div>
                 <div class="min-w-0">
                   <div class="font-bold text-xs text-slate-900 truncate group-hover:text-blue-600 transition">${r.name}</div>
@@ -6098,8 +6139,8 @@
         container.innerHTML += `
           <div class="flex items-center justify-between bg-white/95 border border-slate-200/80 hover:border-blue-300 rounded-2xl p-3 text-xs shadow-2xs hover:shadow-xs transition duration-150 group">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 border border-rose-200/70 text-rose-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
-                ${initial}
+              <div class="relative overflow-hidden w-9 h-9 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 border border-rose-200/70 text-rose-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                ${avatarInner(r.ldap, initial)}
               </div>
               <div class="min-w-0">
                 <div class="font-bold text-slate-900 group-hover:text-blue-600 transition truncate">${r.name} <span class="text-slate-400 font-mono font-normal text-[11px]">@${r.ldap}</span></div>
@@ -6293,8 +6334,8 @@
           <div class="glass-card bg-white/95 border border-slate-200/80 hover:border-blue-300 rounded-2xl p-4 flex flex-col gap-2.5 shadow-2xs hover:shadow-xs transition duration-200 group">
             <div class="flex justify-between items-start gap-2">
               <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200 text-blue-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
-                  ${initial}
+                <div class="relative overflow-hidden w-8 h-8 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200 text-blue-700 font-bold font-mono flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                  ${avatarInner(r.ldap, initial)}
                 </div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-1.5 flex-wrap">
