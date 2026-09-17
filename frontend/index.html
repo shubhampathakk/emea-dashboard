@@ -2895,11 +2895,20 @@
       // Guard the URL: ldap values reach us from BigQuery and occasionally
       // arrive as full emails or with stray characters.
       if (!clean || !/^[a-z0-9._-]+$/.test(clean)) return "";
+      // Hidden with opacity, NOT display:none. This matters: `loading="lazy"`
+      // defers the fetch until an intersection observer says the element is
+      // near the viewport, and an element with display:none has no layout box
+      // to observe - so it never intersects and the image is NEVER REQUESTED.
+      // That combination shipped once and produced exactly zero network
+      // requests, which looked like the corp host was blocking us when in fact
+      // the browser had not asked for anything. opacity:0 keeps the element in
+      // layout (so lazy loading works) while staying invisible over the
+      // initials underneath.
       return `<img src="${PERSON_PHOTO_BASE}${encodeURIComponent(clean)}@google.com"` +
         ` alt="" aria-hidden="true" loading="lazy" referrerpolicy="no-referrer"` +
-        ` class="absolute inset-0 w-full h-full object-cover"` +
-        ` style="display:none"` +
-        ` onload="this.style.display='block'"` +
+        ` class="absolute inset-0 w-full h-full object-cover transition-opacity duration-200"` +
+        ` style="opacity:0"` +
+        ` onload="this.style.opacity='1'"` +
         ` onerror="this.remove()">`;
     }
 
