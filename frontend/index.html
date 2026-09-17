@@ -7466,6 +7466,23 @@
     const SUPPORT_EMAIL_2 = "myashwant@google.com";
     const SUPPORT_RECIPIENTS = `${SUPPORT_EMAIL},${SUPPORT_EMAIL_2}`;
 
+    // One contact rendered as avatar + address. The ldap is just the local part
+    // of the address, which is exactly what avatarInner() wants, so these two
+    // circles get the same corp photo treatment as every other avatar on the
+    // dashboard - lazy loaded, faded in on decode, and silently falling back to
+    // the initial if the photo cannot be fetched. No new fetch path, no new
+    // failure mode: if photos work in the roster they work here.
+    function supportContactRow(email) {
+      const ldap = String(email || "").split("@")[0];
+      return `
+        <div class="flex items-center gap-2">
+          <div class="relative overflow-hidden w-7 h-7 rounded-xl bg-[#915EFF]/10 text-[#7c3aed] border border-[#915EFF]/20 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs">
+            ${avatarInner(ldap, ldap.charAt(0).toUpperCase())}
+          </div>
+          <span class="font-bold text-sm text-slate-900 font-mono">${email}</span>
+        </div>`;
+    }
+
     function copySupportEmail(btn) {
       // Both addresses, comma-separated: pasting this into any mail client's
       // To: field addresses the pair in one go.
@@ -7518,7 +7535,7 @@
                 <div>
                   <h3 class="font-title text-base font-bold text-slate-900">Report an Issue / Contact Support</h3>
                   <p class="text-[11px] text-slate-500 mt-0.5">
-                    For any issues, please email <a href="mailto:${SUPPORT_RECIPIENTS}?subject=${encodeURIComponent(defaultTitle)}" class="font-bold text-[#915EFF] hover:underline">${SUPPORT_EMAIL}</a>
+                    For any issues, please email <a href="mailto:${SUPPORT_RECIPIENTS}?subject=${encodeURIComponent(defaultTitle)}" class="font-bold text-[#915EFF] hover:underline">${SUPPORT_EMAIL}</a> and <a href="mailto:${SUPPORT_RECIPIENTS}?subject=${encodeURIComponent(defaultTitle)}" class="font-bold text-[#915EFF] hover:underline">${SUPPORT_EMAIL_2}</a>
                   </p>
                 </div>
               </div>
@@ -7529,18 +7546,14 @@
 
             <!-- Direct Support Contact Card -->
             <div class="bg-gradient-to-r from-slate-50 via-[#915EFF]/5 to-slate-50 border border-[#915EFF]/20 rounded-2xl p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-2xs">
-              <div>
+              <div class="flex flex-col gap-1.5">
                 <div class="text-[10px] font-bold text-[#7c3aed] uppercase tracking-wider flex items-center gap-1.5">
                   <span class="w-2 h-2 rounded-full bg-[#00cea8] animate-pulse"></span>
                   Direct Support Contact
                 </div>
-                <div class="font-bold text-sm text-slate-900 mt-0.5 font-mono">
-                  ${SUPPORT_EMAIL}
-                </div>
-                <div class="font-bold text-sm text-slate-900 font-mono">
-                  ${SUPPORT_EMAIL_2}
-                </div>
-                <div class="text-[11px] text-slate-500 mt-0.5">
+                ${supportContactRow(SUPPORT_EMAIL)}
+                ${supportContactRow(SUPPORT_EMAIL_2)}
+                <div class="text-[11px] text-slate-500">
                   EMEA Delivery 360
                 </div>
               </div>
@@ -7643,7 +7656,7 @@
       }[currentTab] || 'General';
 
       const formattedDesc = `
-Hi Shubham,
+Hi Team,
 
 ### Issue / Feedback Description:
 ${desc || "[No additional description provided]"}
