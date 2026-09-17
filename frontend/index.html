@@ -719,10 +719,10 @@
         </div>
       </div>
 
-      <!-- 3. 100% Fully Staffed -->
+      <!-- 3. Fully Staffed (>= 85% allocated) -->
       <div onclick="filterToStaffedRoster()" class="glass-card tilt-card bg-white cursor-pointer rounded-2xl p-4 shadow-sm relative border border-slate-200/90 border-t-4 border-t-[#00cea8] group">
         <div class="flex items-center justify-between text-slate-400 mb-1.5">
-          <span class="text-xs font-bold text-slate-600 group-hover:text-[#009b7e] transition-colors">100% Fully Staffed</span>
+          <span class="text-xs font-bold text-slate-600 group-hover:text-[#009b7e] transition-colors" title="People scheduled at 85% or more of a 40h week">Fully Staffed</span>
           <div class="w-8 h-8 rounded-xl bg-[#00cea8]/10 border border-[#00cea8]/25 text-[#009b7e] flex items-center justify-center shadow-2xs">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -734,7 +734,7 @@
           <span class="bg-[#00cea8]/10 text-[#008f73] border border-[#00cea8]/25 text-[11px] font-bold px-2 py-0.5 rounded-lg hover:bg-[#00cea8]/20 transition shadow-2xs" id="kpi-staffed-pct">— of team</span>
         </div>
         <div class="flex items-center justify-between mt-2 pt-1 border-t border-slate-100">
-          <span class="text-[11px] text-slate-500 font-medium">Full-Time Dedicated Delivery</span>
+          <span class="text-[11px] text-slate-500 font-medium">Allocated 85% or more</span>
           <span class="w-2.5 h-2.5 rounded-full bg-[#00cea8] animate-pulse"></span>
         </div>
       </div>
@@ -849,9 +849,9 @@
             <!-- 4 KPI Boxes -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-5">
               <div class="bg-[#00cea8]/10 border border-[#00cea8]/25 rounded-xl p-3.5 shadow-2xs">
-                <div class="text-[10px] font-bold text-[#008f73] uppercase tracking-wider">100% Staffed</div>
+                <div class="text-[10px] font-bold text-[#008f73] uppercase tracking-wider" title="Scheduled at 85% or more of a 40h week">Fully Staffed</div>
                 <div class="text-2xl font-black text-[#00a887] mt-0.5 font-title" id="hub-unified-staffed">—</div>
-                <div class="text-[10px] text-[#008f73]/90 mt-0.5">Full-time dedicated</div>
+                <div class="text-[10px] text-[#008f73]/90 mt-0.5">85%+ allocated</div>
               </div>
               <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 shadow-2xs">
                 <div class="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Partial Allocation</div>
@@ -1287,9 +1287,9 @@
             </select>
             <select id="roster-filter-risk" onchange="renderRosterTable()" class="bg-slate-50 text-xs border border-slate-200/90 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 shadow-inner text-slate-700 font-medium">
               <option value="ALL">All Allocation Statuses</option>
-              <option value="Staffed">100% Fully Staffed</option>
+              <option value="Staffed">Fully Staffed (85%+)</option>
               <option value="Over">Over-allocated &gt;100%</option>
-              <option value="Partial">Partial Allocation &lt;100%</option>
+              <option value="Partial">Partial Allocation (&lt;85%)</option>
               <option value="Bench / Free">Bench / Available Capacity</option>
               <option value="Overdue">Overdue End-Date</option>
             </select>
@@ -4782,7 +4782,10 @@
 
           // ---- Person-level cells (identical on every row of this person) --
           // Status Badge reflects TOTAL PERSON STATUS across all entries
-          let statusBadge = `<span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 100% Staffed</span>`;
+          // "Staffed" is a threshold (>= 85%), not an exact 100%. Print the
+          // real figure: labelling an 88%-allocated person "100% Staffed"
+          // hid the 12% that was actually sellable.
+          let statusBadge = `<span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200/80 shadow-2xs" title="Scheduled ${fmtHrs(personTotalDeliveryHrs)}h against a ${fmtHrs(stdCap)}h week"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> ${personEffPct}% Staffed</span>`;
           if (isPersonBench) {
             statusBadge = `<span class="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-rose-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> Bench (0h)</span>`;
           } else if (isPersonOver) {
