@@ -644,12 +644,12 @@
         <button onclick="resetRosterFiltersAndShowAll()" id="tab-btn-roster" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
           <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
           <span>Staffing Roster</span>
-          <span id="nav-roster-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">1.3k</span>
+          <span id="nav-roster-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">—</span>
         </button>
         <button onclick="switchTab('portfolio')" id="tab-btn-portfolio" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
           <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
           <span>Customer Portfolio</span>
-          <span id="nav-portfolio-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">56</span>
+          <span id="nav-portfolio-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">—</span>
         </button>
         <button onclick="switchTab('timeline')" id="tab-btn-timeline" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
           <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -662,7 +662,7 @@
         <button onclick="switchTab('gtm')" id="tab-btn-gtm" class="nav-tab px-2.5 py-1.5 font-medium transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer">
           <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           <span>Pipeline &amp; Demand</span>
-          <span id="nav-gtm-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">5k</span>
+          <span id="nav-gtm-count" class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">—</span>
         </button>
       </div>
     </div>
@@ -839,10 +839,10 @@
                   <span class="font-bold text-slate-900">Total Delivery Utilization</span>
                   <span class="text-slate-400 font-normal hidden sm:inline">(<span id="hub-capacity-note">—</span>)</span>
                 </span>
-                <span class="font-bold text-[#915EFF] font-mono text-sm" id="hub-unified-util">63.3%</span>
+                <span class="font-bold text-[#915EFF] font-mono text-sm" id="hub-unified-util">—</span>
               </div>
               <div class="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden flex shadow-inner" title="Color = Utilized delivery, Slate = Available capacity">
-                <div id="hub-unified-bar" class="h-3.5 rounded-full transition-all duration-500 shadow-xs" style="width: 63.3%"></div>
+                <div id="hub-unified-bar" class="h-3.5 rounded-full transition-all duration-500 shadow-xs" style="width: 0%"></div>
               </div>
             </div>
 
@@ -850,12 +850,12 @@
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-5">
               <div class="bg-[#00cea8]/10 border border-[#00cea8]/25 rounded-xl p-3.5 shadow-2xs">
                 <div class="text-[10px] font-bold text-[#008f73] uppercase tracking-wider">100% Staffed</div>
-                <div class="text-2xl font-black text-[#00a887] mt-0.5 font-title" id="hub-unified-staffed">182</div>
+                <div class="text-2xl font-black text-[#00a887] mt-0.5 font-title" id="hub-unified-staffed">—</div>
                 <div class="text-[10px] text-[#008f73]/90 mt-0.5">Full-time dedicated</div>
               </div>
               <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 shadow-2xs">
                 <div class="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Partial Allocation</div>
-                <div class="text-2xl font-black text-amber-600 mt-0.5 font-title" id="hub-unified-partial">180</div>
+                <div class="text-2xl font-black text-amber-600 mt-0.5 font-title" id="hub-unified-partial">—</div>
                 <div class="text-[10px] text-amber-700/80 mt-0.5">Shared bandwidth</div>
               </div>
               <div class="bg-[#f12711]/10 border border-[#f12711]/25 rounded-xl p-3.5 shadow-2xs">
@@ -865,7 +865,7 @@
               </div>
               <div class="bg-[#915EFF]/10 border border-[#915EFF]/25 rounded-xl p-3.5 shadow-2xs">
                 <div class="text-[10px] font-bold text-[#7c3aed] uppercase tracking-wider">Weekly Hours</div>
-                <div class="text-2xl font-black text-[#7c3aed] font-mono mt-0.5" id="hub-unified-hours">11,639h</div>
+                <div class="text-2xl font-black text-[#7c3aed] font-mono mt-0.5" id="hub-unified-hours">—</div>
                 <div class="text-[10px] text-[#7c3aed]/80 mt-0.5">Active billable work</div>
               </div>
             </div>
@@ -1222,7 +1222,7 @@
               <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
               <span class="text-xs font-bold text-amber-700 uppercase tracking-wider">ROLLING OFF (&lt;21D)</span>
             </div>
-            <span class="bg-white border border-[#fde68a] text-amber-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-rolling">18</span>
+            <span class="bg-white border border-[#fde68a] text-amber-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-rolling">—</span>
           </div>
           <div class="flex flex-col gap-3" id="kanban-rolling"></div>
         </div>
@@ -1234,7 +1234,7 @@
               <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
               <span class="text-xs font-bold text-blue-700 uppercase tracking-wider">PARTIAL ALLOCATION</span>
             </div>
-            <span class="bg-white border border-[#bfdbfe] text-blue-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-partial">31</span>
+            <span class="bg-white border border-[#bfdbfe] text-blue-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-partial">—</span>
           </div>
           <div class="flex flex-col gap-3" id="kanban-partial"></div>
         </div>
@@ -1246,7 +1246,7 @@
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
               <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">FULLY STAFFED (100%)</span>
             </div>
-            <span class="bg-white border border-[#bbf7d0] text-emerald-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-staffed">34</span>
+            <span class="bg-white border border-[#bbf7d0] text-emerald-700 text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow-2xs" id="board-count-staffed">—</span>
           </div>
           <div class="flex flex-col gap-3" id="kanban-staffed"></div>
         </div>
@@ -1262,7 +1262,7 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5">
           <div>
             <h2 class="font-title text-base font-bold text-slate-900 tracking-tight">Master Staffing Roster</h2>
-            <p class="text-xs text-slate-400 mt-0.5">Showing <span id="roster-alloc-count" class="font-bold text-slate-700">106</span> project allocations across <span id="roster-people-count" class="font-bold text-slate-700">87</span> unique team members</p>
+            <p class="text-xs text-slate-400 mt-0.5">Showing <span id="roster-alloc-count" class="font-bold text-slate-700">—</span> project allocations across <span id="roster-people-count" class="font-bold text-slate-700">—</span> unique team members</p>
           </div>
 
           <!-- Filters Bar with Polished Controls -->
@@ -1351,7 +1351,7 @@
       <div class="glass-card rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col gap-4">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h2 class="font-title text-base font-bold text-slate-900 tracking-tight">Global Customer Breakdown (<span id="portfolio-total-accounts-count" class="font-bold text-indigo-600">56</span> Accounts)</h2>
+            <h2 class="font-title text-base font-bold text-slate-900 tracking-tight">Global Customer Breakdown (<span id="portfolio-total-accounts-count" class="font-bold text-indigo-600">—</span> Accounts)</h2>
             <p class="text-xs text-slate-400 mt-0.5">Staffing allocation counts split by delivery hub (PSO / GSD) per customer</p>
           </div>
           <div class="flex gap-2 text-[10px] font-bold">
@@ -1375,11 +1375,11 @@
         <div class="flex items-center gap-2 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
           <button onclick="setTimelineViewMode('delivery')" id="tv-mode-delivery" class="bg-white text-indigo-700 font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
             <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span>🚀 Client Delivery Roll-off Timeline (<span id="timeline-delivery-count">76</span>)</span>
+            <span>🚀 Client Delivery Roll-off Timeline (<span id="timeline-delivery-count">—</span>)</span>
           </button>
           <button onclick="setTimelineViewMode('presales')" id="tv-mode-presales" class="text-slate-600 hover:text-slate-900 font-semibold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
             <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-            <span>💼 Presales Assignments (<span id="timeline-presales-count">10</span>)</span>
+            <span>💼 Presales Assignments (<span id="timeline-presales-count">—</span>)</span>
           </button>
         </div>
         <span class="text-xs text-slate-400 font-medium hidden sm:inline">Presales opportunities isolated from billable client delivery roll-offs</span>
@@ -1420,7 +1420,7 @@
             <h3 class="font-title text-sm font-bold text-slate-900 tracking-tight">Resource Roll-off &amp; Runway Timeline</h3>
             <p class="text-xs text-slate-400 mt-0.5">Primary view by Resource Name with project assignments, roll-off dates, and remaining runway</p>
           </div>
-          <span class="bg-[#eef2ff] text-[#4338ca] text-xs font-bold px-3.5 py-1.5 rounded-full border border-indigo-100 shadow-2xs" id="timeline-active-count">76 Delivery Resources</span>
+          <span class="bg-[#eef2ff] text-[#4338ca] text-xs font-bold px-3.5 py-1.5 rounded-full border border-indigo-100 shadow-2xs" id="timeline-active-count">Loading…</span>
         </div>
 
         <!-- Cards List -->
@@ -1473,15 +1473,15 @@
                 <span>Unified EMEA Delivery Team</span>
                 <span class="text-indigo-500 text-[10px] font-bold">&gt;</span>
               </span>
-              <span class="text-[10px] text-slate-400 font-mono" id="matrix-emea-people-allocs">460 People (1,210 Allocations)</span>
+              <span class="text-[10px] text-slate-400 font-mono" id="matrix-emea-people-allocs">— People (— Allocations)</span>
             </div>
             <div class="grid grid-cols-3 gap-2 text-center">
               <div onclick="filterToStaffedRoster()" class="cursor-pointer bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl p-2.5 transition">
-                <div class="text-lg font-black text-emerald-700 font-title tracking-tight" id="matrix-emea-staffed">182</div>
+                <div class="text-lg font-black text-emerald-700 font-title tracking-tight" id="matrix-emea-staffed">—</div>
                 <div class="text-[9px] text-emerald-600 font-bold uppercase tracking-wider">Staffed &gt;</div>
               </div>
               <div onclick="filterToPartialRoster()" class="cursor-pointer bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl p-2.5 transition">
-                <div class="text-lg font-black text-amber-700 font-title tracking-tight" id="matrix-emea-partial">180</div>
+                <div class="text-lg font-black text-amber-700 font-title tracking-tight" id="matrix-emea-partial">—</div>
                 <div class="text-[9px] text-amber-600 font-bold uppercase tracking-wider">Partial &gt;</div>
               </div>
               <div onclick="openBenchModal()" class="cursor-pointer bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl p-2.5 transition">
@@ -3707,8 +3707,7 @@
               name: r.name,
               ldap: r.ldap,
               region: r.region || "EMEA",
-              lang: "English",
-              skills: r.skills || r.practice || "Cloud Delivery",
+                            skills: r.skills || r.practice || "\u2014",
               project: "Bench / Unallocated",
               hours: 0,
               allocPct: 0,
@@ -3727,9 +3726,8 @@
               name: r.name,
               ldap: r.ldap,
               region: r.region || "EMEA",
-              lang: "English",
-              skills: r.skills || r.practice || "Cloud Delivery",
-              project: projNames.join(', ') || 'Customer Project',
+                            skills: r.skills || r.practice || "\u2014",
+              project: projNames.join(', ') || '(No project)',
               hours: Math.round(rHours),
               allocPct: allocPct,
               isOOO: Boolean(r.is_ooo),
@@ -4158,6 +4156,11 @@
       if (document.getElementById("matrix-emea-staffed")) {
         document.getElementById("matrix-emea-staffed").textContent = hubs.EMEA.staffed;
       }
+      // This one was missed when its three siblings were wired, so the tile
+      // sat on its markup default of "180" permanently.
+      if (document.getElementById("matrix-emea-partial")) {
+        document.getElementById("matrix-emea-partial").textContent = hubs.EMEA.partial;
+      }
       if (document.getElementById("matrix-emea-bench")) {
         document.getElementById("matrix-emea-bench").textContent = hubs.EMEA.bench;
       }
@@ -4419,8 +4422,8 @@
           : `<span class="text-slate-500 text-[11px] font-medium flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Available</span>`;
 
         const initial = (r.name || "U").charAt(0).toUpperCase();
-        const roleLabel = r.role || "Consultant";
-        const primaryProj = projNames[0] || "Strategic Client Project";
+        const roleLabel = r.role || "\u2014";
+        const primaryProj = projNames[0] || "(Unnamed project)";
 
         if (totalHrs === 0 || allocPct === 0) {
           countBench++;
@@ -4443,7 +4446,7 @@
                   <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                   100% Bench Capacity
                 </div>
-                <div class="text-[11px] text-slate-500 mt-0.5 truncate">${r.skills || r.practice || 'Cloud Delivery'}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5 truncate">${r.skills || r.practice || '\u2014'}</div>
               </div>
               <div class="flex justify-between items-center pt-0.5">
                 ${officePill}
@@ -4750,7 +4753,7 @@
           // ---------------------------------------------------------------
           const rName = r.name || "Unknown";
           const rLdap = r.ldap || "";
-          const skillsStr = r.skills || r.practice || "General Practice";
+          const skillsStr = r.skills || r.practice || "\u2014";
           const mgrDisplayName = getManagerDisplayName(r.manager_ldap, r.manager_name);
 
           // Search was previously evaluated once per rendered row as a single
@@ -5692,7 +5695,7 @@
                   </div>
                 </div>
                 ${regionBadge}
-                <span class="bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-medium px-2.5 py-0.5 rounded-lg max-w-sm truncate">${r.skills || r.practice || 'General Practice'}</span>
+                <span class="bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-medium px-2.5 py-0.5 rounded-lg max-w-sm truncate">${r.skills || r.practice || '\u2014'}</span>
               </div>
               
               <div class="flex items-center gap-3">
@@ -5794,6 +5797,15 @@
           ? `${visibleCount} Delivery Resources`
           : `${visibleCount} Presales Consultants`;
       }
+      // The "All Resources" button shipped with a hardcoded "(83)" and was
+      // never referenced anywhere in JS. Use the mode total, which is counted
+      // before the bucket/search filters are applied - unlike visibleCount
+      // above, this is the size of the unfiltered set the button selects.
+      const allBtn = document.getElementById("tf-all");
+      if (allBtn) {
+        const modeTotal = timelineViewMode === "delivery" ? countDelivery : countPresales;
+        allBtn.textContent = `All Resources (${modeTotal})`;
+      }
     }
 
     // Render Skill Matrix (5 Standardized EMEA Categories)
@@ -5803,7 +5815,7 @@
       const skillCounts = {};
 
       resources.forEach(r => {
-        const p = (r.practice || r.skills || "Cloud Delivery").trim();
+        const p = (r.practice || r.skills || "\u2014").trim();
         skillCounts[p] = (skillCounts[p] || 0) + 1;
       });
 
@@ -6143,7 +6155,7 @@
           ? `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span> <span class="bg-slate-100 text-slate-600 border border-slate-200/80 text-[9px] font-bold px-1.5 py-0.5 rounded-md" title="Dedicated Delivery Center (CC1)">Delivery Center</span>`
           : `<span class="bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">EMEA</span>`;
         const oooPill = ptoPillHtml(r, "md");
-        const practiceStr = r.practice || r.skills || "Cloud Delivery";
+        const practiceStr = r.practice || r.skills || "\u2014";
 
         container.innerHTML += `
           <div class="flex items-center justify-between bg-white/95 border border-slate-200/80 hover:border-blue-300 rounded-2xl p-3 text-xs shadow-2xs hover:shadow-xs transition duration-150 group">

@@ -374,8 +374,12 @@ def build_dashboard_payload(
         mgr_raw = row.get("manager_ldap") or ""
         mgr_ldap = mgr_raw.split("@")[0].strip() if mgr_raw else ""
         mgr_name = row.get("manager_name") or get_manager_name(mgr_ldap)
-        role = row.get("role") or "Consultant"
-        practice = row.get("practice") or "Cloud Delivery"
+        # No invented job titles or practices. Verified against a live payload
+        # that neither default currently fires, but "Consultant" /
+        # "Cloud Delivery" would be indistinguishable from real values if the
+        # source ever went blank - which is exactly how a gap becomes a lie.
+        role = row.get("role") or ""
+        practice = row.get("practice") or ""
         is_ooo = str(row.get("is_ooo") or "").lower() == "true"
         # Leave end date, week-level. The source has no day-level leave table,
         # so this is the END OF THE LAST WEEK with booked PTO, not the last day
@@ -492,8 +496,10 @@ def build_dashboard_payload(
         # Only a real, named project counts as an assignment.
         if has_project:
             resource_map[res_key]["assignments"].append({
-                "project": proj_name or "Cloud Transformation",
-                "account": acc_name or "Unassigned Account",
+                # Never invent an engagement name. "Cloud Transformation" reads
+                # exactly like a real project and would be impossible to spot.
+                "project": proj_name or "(Unnamed project)",
+                "account": acc_name or "(Unnamed account)",
                 "weekly_hours": hrs,
                 "hours": hrs / 5.0,
                 "start": start_date,
